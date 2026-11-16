@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FUNKY STUDIO 64 - OFFICIAL</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
+    body { background: radial-gradient(circle at top, #2e0854, #070112 85%); color: #fff; min-height: 100vh; display: flex; flex-direction: column; align-items: center; }
+    
+    .auth-overlay { position: fixed; inset: 0; background: rgba(5, 1, 15, 0.96); display: flex; align-items: center; justify-content: center; z-index: 100; }
+    .auth-card { background: #180830; border: 2px solid #f59e0b; padding: 28px; border-radius: 16px; width: 90%; max-width: 360px; text-align: center; box-shadow: 0 0 35px rgba(245, 158, 11, 0.4); }
+    .auth-card h2 { color: #fde047; margin-bottom: 16px; }
+    .auth-card input { width: 100%; padding: 12px; margin-bottom: 12px; border-radius: 8px; border: 1px solid #6b21a8; background: #0f0520; color: #fff; }
+    .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin-bottom: 8px; }
+    .btn-primary { background: linear-gradient(90deg, #ff007f, #7928ca); color: #fff; }
+    .btn-secondary { background: #334155; color: #fff; }
+
+    .header { width: 100%; padding: 12px 16px; background: rgba(0,0,0,0.85); border-bottom: 2px solid #ff007f; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .points-pill { background: #1e1b4b; border: 1px solid #38bdf8; padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 14px; }
+    .action-btn { border: none; padding: 6px 10px; border-radius: 6px; font-weight: bold; cursor: pointer; margin-left: 6px; font-size: 12px; }
+
+    .stats-strip { display: flex; gap: 15px; font-size: 12px; color: #cbd5e1; margin-top: 8px; }
+    .status-bar { margin: 12px 0; padding: 8px 24px; border-radius: 25px; background: #ff007f; font-weight: bold; font-size: 18px; }
+    
+    .wheel-wrap { position: relative; width: 340px; height: 340px; transition: transform 0.6s ease; }
+    .wheel-wrap.zoomed { transform: scale(1.25); z-index: 20; margin: 35px 0; }
+    .flapper { position: absolute; top: -16px; left: 50%; transform: translateX(-50%); border-left: 16px solid transparent; border-right: 16px solid transparent; border-top: 32px solid #fde047; z-index: 10; filter: drop-shadow(0 4px 6px #000); }
+    canvas { width: 100%; height: 100%; border-radius: 50%; border: 6px solid #ffd700; transition: transform 15s cubic-bezier(0.08, 0.92, 0.12, 1); }
+
+    .chips { display: flex; gap: 10px; margin: 15px 0; flex-wrap: wrap; justify-content: center; }
+    .chip { width: 44px; height: 44px; border-radius: 50%; border: 2px dashed #fff; background: #e11d48; display: flex; align-items: center; justify-content: center; font-weight: bold; cursor: pointer; }
+    .chip.active { border-color: #fde047; transform: scale(1.15); }
+    .bet-all-btn { background: #f59e0b; color: #000; border: none; padding: 0 14px; border-radius: 20px; font-weight: bold; cursor: pointer; }
+
+    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; width: 95%; max-width: 540px; margin-bottom: 25px; }
+    .cell { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25); border-radius: 8px; padding: 10px 4px; text-align: center; cursor: pointer; position: relative; }
+    .cell b { display: block; font-size: 15px; }
+    .cell span { font-size: 11px; color: #fde047; }
+    .badge { position: absolute; top: -6px; right: -6px; background: #10b981; color: #000; font-size: 11px; font-weight: bold; padding: 2px 6px; border-radius: 10px; }
+
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.88); align-items: center; justify-content: center; z-index: 90; }
+    .modal-box { background: #1e1b4b; border: 2px solid #38bdf8; padding: 20px; border-radius: 12px; width: 92%; max-width: 420px; }
+    .list-item { background: #0f172a; padding: 10px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+  </style>
+</head>
+<body>
+
+  <div class="auth-overlay" id="authBox">
+    <div class="auth-card">
+      <h2>FUNKY STUDIO ID</h2>
+      <input type="text" id="uidInput" placeholder="ইউজার আইডি লিখুন">
+      <input type="password" id="passInput" placeholder="পাসওয়ার্ড লিখুন">
+      <button class="btn btn-primary" onclick="doLogin()">লগইন করুন</button>
+      <button class="btn btn-secondary" onclick="doRegister()">নতুন স্থায়ী আইডি খুলুন</button>
+      <p id="authMsg" style="color:#f87171; font-size:13px; margin-top:8px;"></p>
+    </div>
+  </div>
+
+  <div class="header">
+    <div><b style="color:#fde047;">FUNKY 64</b> | ID: <span id="displayUid">-</span></div>
+    <div class="points-pill">
+      Points: <span id="displayPoints">0</span>
+      <button class="action-btn" id="playerReqBtn" style="background:#10b981; color:#000;" onclick="openModal('reqModal')">Request</button>
+      <button class="action-btn" id="playerHistBtn" style="background:#38bdf8; color:#000;" onclick="openModal('histModal')">History</button>
+      <button class="action-btn" id="ownerPanelBtn" style="display:none; background:#f59e0b; color:#000;" onclick="openModal('ownerModal')">Owner Panel</button>
+    </div>
+  </div>
+
+  <div class="stats-strip" id="playerStats">
+    <span>Total Won: <b id="statWon" style="color:#10b981;">0</b></span>
+    <span>Total Lost: <b id="statLost" style="color:#f87171;">0</b></span>
+  </div>
+
+  <div class="status-bar" id="statusBanner">Waiting...</div>
+
+  <div class="wheel-wrap" id="wheelWrap">
+    <div class="flapper"></div>
+    <canvas id="wheelCanvas" width="400" height="400"></canvas>
+  </div>
+
+  <div class="chips">
+    <div class="chip active" onclick="setChip(10, this)">10</div>
+    <div class="chip" style="background:#2563eb" onclick="setChip(50, this)">50</div>
+    <div class="chip" style="background:#16a34a" onclick="setChip(100, this)">100</div>
+    <div class="chip" style="background:#9333ea" onclick="setChip(500, this)">500</div>
+    <button class="bet-all-btn" onclick="betAll()">BET ALL</button>
+  </div>
+
+  <div class="grid" id="betGrid"></div>
+  <div class="modal" id="reqModal">
+    <div class="modal-box">
+      <h3 style="margin-bottom:12px;">ওনারকে রিকোয়েস্ট পাঠান</h3>
+      <select id="reqType" style="width:100%; padding:10px; margin-bottom:10px; border-radius:6px;">
+        <option value="ADD">Add Points (পয়েন্ট যোগ)</option>
+        <option value="DEDUCT">Deduct Points (পয়েন্ট বিয়োগ)</option>
+      </select>
+      <input type="number" id="reqAmount" placeholder="পয়েন্টের পরিমাণ লিখুন" style="width:100%; padding:10px; margin-bottom:10px; border-radius:6px;">
+      <input type="text" id="reqNote" placeholder="নোট বা রেফারেন্স" style="width:100%; padding:10px; margin-bottom:12px; border-radius:6px;">
+      <button class="btn btn-primary" onclick="submitPointRequest()">রিকোয়েস্ট পাঠান</button>
+      <button class="btn btn-secondary" onclick="closeModals()">বন্ধ করুন</button>
+    </div>
+  </div>
+
+  <div class="modal" id="histModal">
+    <div class="modal-box">
+      <h3 style="margin-bottom:12px;">আপনার লেনদেনের ইতিহাস</h3>
+      <div id="playerHistList" style="max-height:260px; overflow-y:auto; margin-bottom:12px;"></div>
+      <button class="btn btn-secondary" onclick="closeModals()">বন্ধ করুন</button>
+    </div>
+  </div>
+
+  <div class="modal" id="ownerModal">
+    <div class="modal-box">
+      <h3 style="color:#fde047; margin-bottom:10px;">Owner Control Panel</h3>
+      <h4 style="font-size:13px; margin-bottom:6px; color:#38bdf8;">Pending Requests:</h4>
+      <div id="ownerReqList" style="max-height:180px; overflow-y:auto; margin-bottom:12px;"></div>
+      <h4 style="font-size:13px; margin-bottom:6px; color:#10b981;">All Registered Players:</h4>
+      <div id="ownerUserList" style="max-height:140px; overflow-y:auto; margin-bottom:12px;"></div>
+      <button class="btn btn-secondary" onclick="closeModals()">বন্ধ করুন</button>
+    </div>
+  </div>
+
+  <script>
+    const socket = io();
+    let chip = 10;
+    let wheelData = [];
+    let payoutsData = {};
+    let myBets = {};
+
+    const betOptions = ['1','P','L','A','Y','F','U','N','K','T','I','M','E','BAR','DISCO','STAYIN','VIP'];
+
+    function doLogin() {
+      socket.emit('login_user', { userId: document.getElementById('uidInput').value, password: document.getElementById('passInput').value });
+    }
+    function doRegister() {
+      socket.emit('register_user', { userId: document.getElementById('uidInput').value, password: document.getElementById('passInput').value });
+    }
+    function setChip(val, el) {
+      chip = val;
+      document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+      el.classList.add('active');
+    }
+    function betAll() {
+      betOptions.forEach(opt => socket.emit('place_bet', { segmentId: opt, amount: chip }));
+    }
+
+    function drawWheel() {
+      const canvas = document.getElementById('wheelCanvas');
+      const ctx = canvas.getContext('2d');
+      const arc = (2 * Math.PI) / 64;
+      const colors = { '1': '#facc15', 'BAR': '#22c55e', 'DISCO': '#ec4899', 'STAYIN': '#06b6d4', 'VIP': '#ef4444' };
+
+      wheelData.forEach((seg, i) => {
+        const angle = i * arc - Math.PI / 2;
+        ctx.beginPath();
+        ctx.fillStyle = colors[seg] || '#8b5cf6';
+        ctx.moveTo(200, 200);
+        ctx.arc(200, 200, 195, angle, angle + arc);
+        ctx.fill();
+        ctx.strokeStyle = '#111';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(200 + Math.cos(angle) * 188, 200 + Math.sin(angle) * 188, 3, 0, 2 * Math.PI);
+        ctx.fillStyle = '#fff';
+        ctx.fill();
+      });
+    }
+
+    function renderGrid() {
+      const grid = document.getElementById('betGrid');
+      grid.innerHTML = '';
+      betOptions.forEach(opt => {
+        const amt = myBets[opt] || 0;
+        const div = document.createElement('div');
+        div.className = 'cell';
+        div.innerHTML = `${amt > 0 ? `<div class="badge">${amt}</div>` : ''}<b>${opt}</b><span>${payoutsData[opt] || 2}x</span>`;
+        div.onclick = () => socket.emit('place_bet', { segmentId: opt, amount: chip });
+        grid.appendChild(div);
+      });
+    }
+
+    function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+    function closeModals() {
+      document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
+    }
+
+    function submitPointRequest() {
+      socket.emit('send_point_request', {
+        type: document.getElementById('reqType').value,
+        amount: document.getElementById('reqAmount').value,
+        note: document.getElementById('reqNote').value
+      });
+      closeModals();
+    }
+
+    function renderHistory(list) {
+      const el = document.getElementById('playerHistList');
+      if (!list || list.length === 0) {
+        el.innerHTML = '<p style="color:#94a3b8;">কোনো ইতিহাস নেই।</p>';
+        return;
+      }
+      el.innerHTML = list.map(h => `
+        <div class="list-item">
+          <div><b>${h.type === 'ADD' ? '+ Add' : '- Deduct'} ${h.amount}</b><br><small>${h.note || ''}</small></div>
+          <span style="color:${h.status === 'APPROVED' ? '#10b981' : h.status === 'REJECTED' ? '#ef4444' : '#facc15'}">${h.status}</span>
+        </div>
+      `).join('');
+    }
+
+    function renderOwnerData(pending, users) {
+      const reqEl = document.getElementById('ownerReqList');
+      reqEl.innerHTML = (!pending || pending.length === 0)
+        ? '<p style="color:#94a3b8; font-size:12px;">কোনো পেন্ডিং রিকোয়েস্ট নেই।</p>'
+        : pending.map(r => `
+          <div class="list-item">
+            <div><b>${r.userId}</b> (${r.type}: ${r.amount})<br><small>${r.note || ''}</small></div>
+            <div>
+              <button onclick="handleReq('${r._id}', 'APPROVE')" style="background:#10b981; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">✔</button>
+              <button onclick="handleReq('${r._id}', 'REJECT')" style="background:#ef4444; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">✖</button>
+            </div>
+          </div>
+        `).join('');
+
+      const userEl = document.getElementById('ownerUserList');
+      userEl.innerHTML = (!users || users.length === 0)
+        ? '<p style="color:#94a3b8; font-size:12px;">কোনো প্লেয়ার নেই।</p>'
+        : users.map(u => `
+          <div class="list-item">
+            <span><b>${u.userId}</b></span>
+            <span>Pts: <b>${u.points}</b> | W:${u.totalWon} L:${u.totalLost}</span>
+          </div>
+        `).join('');
+    }
+
+    function handleReq(id, action) {
+      socket.emit('owner_handle_request', { requestId: id, action });
+    }
+
+    socket.on('wheel_setup', (data) => {
+      wheelData = data.wheel;
+      payoutsData = data.payouts;
+      drawWheel();
+      renderGrid();
+    });
+
+    socket.on('auth_error', (msg) => document.getElementById('authMsg').innerText = msg);
+    socket.on('bet_error', (msg) => alert(msg));
+    socket.on('auth_success', (data) => {
+      document.getElementById('authBox').style.display = 'none';
+      document.getElementById('displayUid').innerText = data.userId;
+      document.getElementById('displayPoints').innerText = data.points;
+      if (data.role === 'owner') {
+        document.getElementById('playerReqBtn').style.display = 'none';
+        document.getElementById('playerHistBtn').style.display = 'none';
+        document.getElementById('playerStats').style.display = 'none';
+        document.getElementById('ownerPanelBtn').style.display = 'inline-block';
+        renderOwnerData(data.pendingRequests, data.allUsers);
+      } else {
+        document.getElementById('statWon').innerText = data.totalWon || 0;
+        document.getElementById('statLost').innerText = data.totalLost || 0;
+        renderHistory(data.history);
+      }
+    });
+
+    socket.on('points_updated', (data) => {
+      document.getElementById('displayPoints').innerText = data.points;
+      document.getElementById('statWon').innerText = data.totalWon;
+      document.getElementById('statLost').innerText = data.totalLost;
+    });
+    socket.on('history_updated', (list) => renderHistory(list));
+    socket.on('my_bets_updated', (bets) => { myBets = bets; renderGrid(); });
+    socket.on('request_sent', (msg) => alert(msg));
+    socket.on('new_owner_request', () => alert('নতুন রিকোয়েস্ট এসেছে! Owner Panel চেক করুন।'));
+    socket.on('refresh_owner_data', (data) => renderOwnerData(data.pending, data.allUsers));
+
+    socket.on('timer_update', (data) => {
+      const banner = document.getElementById('statusBanner');
+      const wrap = document.getElementById('wheelWrap');
+      if (data.state === 'BETTING') {
+        banner.innerText = `BETTING TIME: ${data.timer}s`;
+        wrap.classList.remove('zoomed');
+      } else {
+        banner.innerText = `SPINNING: ${data.timer}s`;
+        wrap.classList.add('zoomed');
+      }
+    });
+
+    socket.on('spin_start', (data) => {
+      const canvas = document.getElementById('wheelCanvas');
+      canvas.style.transition = `transform ${data.duration}s cubic-bezier(0.08, 0.92, 0.12, 1)`;
+      canvas.style.transform = `rotate(${data.rotation}deg)`;
+    });
+
+    socket.on('betting_start', () => { myBets = {}; renderGrid(); });
+    socket.on('round_result', (data) => {
+      document.getElementById('statusBanner').innerText = `WINNER: ${data.winner} (${data.payout}x)!`;
+    });
+  </script>
+</body>
+</html>
