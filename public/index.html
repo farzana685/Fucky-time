@@ -7,8 +7,11 @@
   <script src="/socket.io/socket.io.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
-    body { background: radial-gradient(circle at top, #3b0764, #070112 85%); color: #fff; min-height: 100vh; display: flex; flex-direction: column; align-items: center; overflow-x: hidden; }
+    body { background: radial-gradient(circle at top, #3b0764, #070112 85%); color: #fff; min-height: 100vh; display: flex; flex-direction: column; align-items: center; overflow-x: hidden; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
     
+    .privacy-shield { display: none; position: fixed; inset: 0; background: #000; color: #ef4444; z-index: 9999; align-items: center; justify-content: center; text-align: center; font-size: 18px; font-weight: bold; padding: 20px; }
+    .dynamic-watermark { position: fixed; pointer-events: none; z-index: 75; font-size: 13px; font-weight: bold; color: rgba(255, 255, 255, 0.14); transform: rotate(-20deg); transition: all 1.5s ease; }
+
     .auth-overlay { position: fixed; inset: 0; background: rgba(5, 1, 15, 0.96); display: flex; align-items: center; justify-content: center; z-index: 100; }
     .auth-card { background: #180830; border: 2px solid #f59e0b; padding: 28px; border-radius: 16px; width: 90%; max-width: 360px; text-align: center; box-shadow: 0 0 35px rgba(245, 158, 11, 0.4); }
     .auth-card h2 { color: #fde047; margin-bottom: 16px; }
@@ -21,14 +24,14 @@
     .points-pill { background: #1e1b4b; border: 1px solid #38bdf8; padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 14px; }
     .action-btn { border: none; padding: 6px 10px; border-radius: 6px; font-weight: bold; cursor: pointer; margin-left: 6px; font-size: 12px; }
 
-    .stats-strip { display: flex; gap: 15px; font-size: 12px; color: #cbd5e1; margin-top: 6px; }
+    .stats-strip { display: flex; gap: 12px; font-size: 12px; color: #cbd5e1; margin-top: 6px; flex-wrap: wrap; justify-content: center; }
     .status-bar { margin: 8px 0; padding: 8px 24px; border-radius: 25px; background: #ff007f; font-weight: bold; font-size: 15px; text-align: center; box-shadow: 0 0 15px rgba(255,0,127,0.5); }
 
     .recent-bar { display: flex; gap: 5px; margin-bottom: 10px; background: rgba(0,0,0,0.6); padding: 5px 12px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.18); align-items: center; flex-wrap: wrap; justify-content: center; }
     .recent-pill { padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; color: #000; }
     
     .wheel-wrap { position: relative; width: 350px; height: 350px; transition: transform 0.6s ease; }
-    .wheel-wrap.zoomed { transform: scale(1.18); z-index: 20; margin: 28px 0; }
+    .wheel-wrap.zoomed { transform: scale(1.16); z-index: 20; margin: 24px 0; }
     .flapper { position: absolute; top: -16px; left: 50%; transform: translateX(-50%); border-left: 16px solid transparent; border-right: 16px solid transparent; border-top: 32px solid #fde047; z-index: 10; filter: drop-shadow(0 4px 6px #000); }
     .flapper.ticking { animation: flapperTick 0.14s infinite alternate; }
     @keyframes flapperTick { from { transform: translateX(-50%) rotate(-14deg); } to { transform: translateX(-50%) rotate(14deg); } }
@@ -67,6 +70,8 @@
 </head>
 <body>
 
+  <div class="privacy-shield" id="privacyShield">⚠️ নিরাপত্তা সতর্কতা!<br>এই গেমে স্ক্রিনশট বা স্ক্রিন রেকর্ডিং সম্পূর্ণ নিষিদ্ধ।</div>
+  <div class="dynamic-watermark" id="userWatermark"></div>
   <div class="win-toast" id="winToast">YOU WON +0 PTS!</div>
 
   <div class="auth-overlay" id="authBox">
@@ -91,8 +96,9 @@
   </div>
 
   <div class="stats-strip" id="playerStats">
-    <span>Total Won: <b id="statWon" style="color:#10b981;">0</b></span>
-    <span>Total Lost: <b id="statLost" style="color:#f87171;">0</b></span>
+    <span>Won: <b id="statWon" style="color:#10b981;">0</b></span>
+    <span>Lost: <b id="statLost" style="color:#f87171;">0</b></span>
+    <span>Turnover Left: <b id="statTurnover" style="color:#fde047;">0</b></span>
   </div>
 
   <div class="status-bar" id="statusBanner">Waiting...</div>
@@ -172,6 +178,34 @@
     let isWaitingForNextRound = false;
 
     setInterval(() => { fetch('/ping').catch(() => {}); }, 240000);
+
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('copy', e => e.preventDefault());
+    document.addEventListener('keyup', e => {
+      if (e.key === 'PrintScreen') {
+        navigator.clipboard.writeText('');
+        document.getElementById('privacyShield').style.display = 'flex';
+        setTimeout(() => { document.getElementById('privacyShield').style.display = 'none'; }, 2500);
+      }
+    });
+    document.addEventListener('visibilitychange', () => {
+      document.getElementById('privacyShield').style.display = document.hidden ? 'flex' : 'none';
+    });
+    window.addEventListener('blur', () => {
+      document.getElementById('privacyShield').style.display = 'flex';
+    });
+    window.addEventListener('focus', () => {
+      document.getElementById('privacyShield').style.display = 'none';
+    });
+    setInterval(() => {
+      const uid = document.getElementById('displayUid')?.innerText || '';
+      const wm = document.getElementById('userWatermark');
+      if (uid && uid !== '-' && wm) {
+        wm.innerText = `ID: ${uid} • ${new Date().toLocaleTimeString()}`;
+        wm.style.top = `${Math.floor(Math.random() * 70) + 15}%`;
+        wm.style.left = `${Math.floor(Math.random() * 60) + 10}%`;
+      }
+    }, 4000);
 
     const SEGMENT_COLORS = {
       '1': '#facc15',
@@ -306,7 +340,7 @@
       ctx.fillStyle = '#fb923c';
       ctx.fillText('Time', cx, cy + 12);
     }
-        function createCellHTML(seg, customTitle) {
+    function createCellHTML(seg, customTitle) {
       const div = document.createElement('div');
       div.className = 'cell';
       div.style.borderColor = SEGMENT_COLORS[seg] || '#fff';
@@ -398,12 +432,15 @@
       const userEl = document.getElementById('ownerUserList');
       userEl.innerHTML = (!users || users.length === 0)
         ? '<p style="color:#94a3b8; font-size:12px;">কোনো প্লেয়ার নেই।</p>'
-        : users.map(u => `
-          <div class="list-item">
-            <span><b>${u.userId}</b></span>
-            <span>Pts: <b>${u.points}</b> | W:${u.totalWon} L:${u.totalLost}</span>
-          </div>
-        `).join('');
+        : users.map(u => {
+          const remT = Math.max(0, (u.requiredTurnover || 0) - (u.completedTurnover || 0));
+          return `
+            <div class="list-item">
+              <span><b>${u.userId}</b></span>
+              <span>Pts: <b>${u.points}</b> | TO Left:${remT}</span>
+            </div>
+          `;
+        }).join('');
     }
 
     function handleReq(id, action) {
@@ -445,6 +482,7 @@
       } else {
         document.getElementById('statWon').innerText = data.totalWon || 0;
         document.getElementById('statLost').innerText = data.totalLost || 0;
+        document.getElementById('statTurnover').innerText = data.remainingTurnover || 0;
         renderHistory(data.history);
       }
     });
@@ -453,6 +491,9 @@
       document.getElementById('displayPoints').innerText = data.points;
       document.getElementById('statWon').innerText = data.totalWon;
       document.getElementById('statLost').innerText = data.totalLost;
+      if (typeof data.remainingTurnover === 'number') {
+        document.getElementById('statTurnover').innerText = data.remainingTurnover;
+      }
       if (data.lastWin && data.lastWin > 0) {
         const toast = document.getElementById('winToast');
         toast.innerText = `🎉 YOU WON +${data.lastWin} PTS!`;
@@ -488,6 +529,7 @@
       } else if (data.state === 'RESULT') {
         banner.style.background = '#fde047';
         banner.style.color = '#000';
+        wrap.classList.remove('zoomed');
         flapper.classList.remove('ticking');
       }
     });
