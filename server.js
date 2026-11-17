@@ -154,7 +154,6 @@ async function calculateSpinResult() {
   }
   return '1';
 }
-
 setInterval(async () => {
   timer--;
 
@@ -217,6 +216,11 @@ setInterval(async () => {
       );
 
       if (updatedUser) {
+        if (updatedUser.points < 10 && updatedUser.requiredTurnover > updatedUser.completedTurnover) {
+          updatedUser.requiredTurnover = 0;
+          updatedUser.completedTurnover = 0;
+          await updatedUser.save();
+        }
         const remTurnover = Math.max(0, (updatedUser.requiredTurnover || 0) - (updatedUser.completedTurnover || 0));
         io.to(uId).emit('points_updated', {
           points: updatedUser.points,
@@ -253,6 +257,7 @@ setInterval(async () => {
     currentBets = {};
     lastResult = { winner: winnerId, payout: multiplier };
     io.emit('round_result', { ...lastResult, recentResults });
+
   } else if (gameState === 'RESULT' && timer <= 0) {
     gameState = 'BETTING';
     timer = 10;
@@ -309,7 +314,6 @@ io.on('connection', (socket) => {
       socket.emit('auth_error', 'রেজিস্ট্রেশন সমস্যা হয়েছে।');
     }
   });
-
   socket.on('login_user', async ({ userId, password }) => {
     try {
       if (typeof userId !== 'string' || typeof password !== 'string') return;
@@ -441,15 +445,25 @@ io.on('connection', (socket) => {
     if (action === 'APPROVE') {
       if (reqDoc.type === 'ADD') {
         const addedTurnover = Math.round(reqDoc.amount * 1.5);
+        const existingUser = await User.findOne({ userId: reqDoc.userId });
+        const hasZeroBalance = !existingUser || existingUser.points < 10;
+
+        const updateQuery = hasZeroBalance
+          ? {
+              $inc: { points: reqDoc.amount, totalDeposited: reqDoc.amount },
+              $set: { requiredTurnover: addedTurnover, completedTurnover: 0 }
+            }
+          : {
+              $inc: {
+                points: reqDoc.amount,
+                totalDeposited: reqDoc.amount,
+                requiredTurnover: addedTurnover
+              }
+            };
+
         const updatedUser = await User.findOneAndUpdate(
           { userId: reqDoc.userId },
-          {
-            $inc: {
-              points: reqDoc.amount,
-              totalDeposited: reqDoc.amount,
-              requiredTurnover: addedTurnover
-            }
-          },
+          updateQuery,
           { new: true }
         );
         reqDoc.status = 'APPROVED';
@@ -504,4 +518,4 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`Funky Studio Live 24/7 on ${PORT}`));
-          
+        
