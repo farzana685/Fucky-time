@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FUNKY STUDIO 64 - OFFICIAL</title>
+  <title>FUNKY TIME - LIVE STUDIO</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
-    body { background: radial-gradient(circle at top, #2e0854, #070112 85%); color: #fff; min-height: 100vh; display: flex; flex-direction: column; align-items: center; }
+    body { background: radial-gradient(circle at top, #3b0764, #070112 85%); color: #fff; min-height: 100vh; display: flex; flex-direction: column; align-items: center; overflow-x: hidden; }
     
     .auth-overlay { position: fixed; inset: 0; background: rgba(5, 1, 15, 0.96); display: flex; align-items: center; justify-content: center; z-index: 100; }
     .auth-card { background: #180830; border: 2px solid #f59e0b; padding: 28px; border-radius: 16px; width: 90%; max-width: 360px; text-align: center; box-shadow: 0 0 35px rgba(245, 158, 11, 0.4); }
@@ -17,39 +17,61 @@
     .btn-primary { background: linear-gradient(90deg, #ff007f, #7928ca); color: #fff; }
     .btn-secondary { background: #334155; color: #fff; }
 
-    .header { width: 100%; padding: 12px 16px; background: rgba(0,0,0,0.85); border-bottom: 2px solid #ff007f; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .header { width: 100%; padding: 10px 16px; background: rgba(0,0,0,0.88); border-bottom: 2px solid #ff007f; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
     .points-pill { background: #1e1b4b; border: 1px solid #38bdf8; padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 14px; }
     .action-btn { border: none; padding: 6px 10px; border-radius: 6px; font-weight: bold; cursor: pointer; margin-left: 6px; font-size: 12px; }
 
-    .stats-strip { display: flex; gap: 15px; font-size: 12px; color: #cbd5e1; margin-top: 8px; }
-    .status-bar { margin: 12px 0; padding: 8px 24px; border-radius: 25px; background: #ff007f; font-weight: bold; font-size: 18px; }
+    .stats-strip { display: flex; gap: 15px; font-size: 12px; color: #cbd5e1; margin-top: 6px; }
+    .status-bar { margin: 8px 0; padding: 8px 24px; border-radius: 25px; background: #ff007f; font-weight: bold; font-size: 15px; text-align: center; box-shadow: 0 0 15px rgba(255,0,127,0.5); }
+
+    .recent-bar { display: flex; gap: 5px; margin-bottom: 10px; background: rgba(0,0,0,0.6); padding: 5px 12px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.18); align-items: center; flex-wrap: wrap; justify-content: center; }
+    .recent-pill { padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; color: #000; }
     
-    .wheel-wrap { position: relative; width: 340px; height: 340px; transition: transform 0.6s ease; }
-    .wheel-wrap.zoomed { transform: scale(1.25); z-index: 20; margin: 35px 0; }
+    .wheel-wrap { position: relative; width: 350px; height: 350px; transition: transform 0.6s ease; }
+    .wheel-wrap.zoomed { transform: scale(1.18); z-index: 20; margin: 28px 0; }
     .flapper { position: absolute; top: -16px; left: 50%; transform: translateX(-50%); border-left: 16px solid transparent; border-right: 16px solid transparent; border-top: 32px solid #fde047; z-index: 10; filter: drop-shadow(0 4px 6px #000); }
-    canvas { width: 100%; height: 100%; border-radius: 50%; border: 6px solid #ffd700; transition: transform 15s cubic-bezier(0.08, 0.92, 0.12, 1); }
+    .flapper.ticking { animation: flapperTick 0.14s infinite alternate; }
+    @keyframes flapperTick { from { transform: translateX(-50%) rotate(-14deg); } to { transform: translateX(-50%) rotate(14deg); } }
 
-    .chips { display: flex; gap: 10px; margin: 15px 0; flex-wrap: wrap; justify-content: center; }
-    .chip { width: 44px; height: 44px; border-radius: 50%; border: 2px dashed #fff; background: #e11d48; display: flex; align-items: center; justify-content: center; font-weight: bold; cursor: pointer; }
-    .chip.active { border-color: #fde047; transform: scale(1.15); }
-    .bet-all-btn { background: #f59e0b; color: #000; border: none; padding: 0 14px; border-radius: 20px; font-weight: bold; cursor: pointer; }
+    canvas { width: 100%; height: 100%; border-radius: 50%; border: 6px solid #ffd700; box-shadow: 0 0 30px rgba(255, 215, 0, 0.6); }
 
-    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; width: 95%; max-width: 540px; margin-bottom: 25px; }
-    .cell { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25); border-radius: 8px; padding: 10px 4px; text-align: center; cursor: pointer; position: relative; }
-    .cell b { display: block; font-size: 15px; }
-    .cell span { font-size: 11px; color: #fde047; }
-    .badge { position: absolute; top: -6px; right: -6px; background: #10b981; color: #000; font-size: 11px; font-weight: bold; padding: 2px 6px; border-radius: 10px; }
+    .wait-overlay { display: none; position: absolute; inset: 0; background: rgba(15, 5, 32, 0.88); border-radius: 50%; align-items: center; justify-content: center; text-align: center; padding: 20px; z-index: 15; border: 4px solid #38bdf8; font-weight: bold; color: #fde047; font-size: 15px; }
+
+    .win-toast { display: none; position: fixed; top: 80px; background: linear-gradient(90deg, #facc15, #f97316); color: #000; padding: 10px 24px; border-radius: 30px; font-weight: 900; font-size: 18px; z-index: 80; box-shadow: 0 0 25px #fde047; animation: popIn 0.3s ease; }
+    @keyframes popIn { from { transform: scale(0.5); } to { transform: scale(1); } }
+
+    .chips { display: flex; gap: 10px; margin: 12px 0; flex-wrap: wrap; justify-content: center; }
+    .chip { width: 42px; height: 42px; border-radius: 50%; border: 2px dashed #fff; background: #e11d48; display: flex; align-items: center; justify-content: center; font-weight: bold; cursor: pointer; font-size: 13px; }
+    .chip.active { border-color: #fde047; transform: scale(1.15); box-shadow: 0 0 12px #fde047; }
+
+    .board-container { width: 96%; max-width: 560px; margin-bottom: 25px; }
+    .board-top { display: grid; grid-template-columns: 1fr 2.5fr 1.2fr; gap: 6px; }
+    .letters-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+    .bonus-col { display: flex; flex-direction: column; gap: 5px; }
+    .left-col { display: flex; flex-direction: column; gap: 5px; }
+
+    .cell { background: rgba(255,255,255,0.12); border: 2px solid rgba(255,255,255,0.25); border-radius: 8px; padding: 8px 4px; text-align: center; cursor: pointer; position: relative; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+    .cell:active { transform: scale(0.96); }
+    .cell b { display: block; font-size: 14px; }
+    .cell span { font-size: 10px; color: #fde047; }
+    .badge { position: absolute; top: -6px; right: -6px; background: #10b981; color: #000; font-size: 10px; font-weight: bold; padding: 2px 5px; border-radius: 10px; }
+
+    .quick-bets { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 8px; }
+    .q-btn { padding: 9px; border: none; border-radius: 8px; font-weight: bold; font-size: 12px; cursor: pointer; color: #fff; }
 
     .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.88); align-items: center; justify-content: center; z-index: 90; }
     .modal-box { background: #1e1b4b; border: 2px solid #38bdf8; padding: 20px; border-radius: 12px; width: 92%; max-width: 420px; }
     .list-item { background: #0f172a; padding: 10px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+    .house-box { background: linear-gradient(135deg, #064e3b, #0f172a); border: 1px solid #10b981; padding: 12px; border-radius: 8px; margin-bottom: 12px; }
   </style>
 </head>
 <body>
 
+  <div class="win-toast" id="winToast">YOU WON +0 PTS!</div>
+
   <div class="auth-overlay" id="authBox">
     <div class="auth-card">
-      <h2>FUNKY STUDIO ID</h2>
+      <h2>FUNKY TIME LIVE</h2>
       <input type="text" id="uidInput" placeholder="ইউজার আইডি লিখুন">
       <input type="password" id="passInput" placeholder="পাসওয়ার্ড লিখুন">
       <button class="btn btn-primary" onclick="doLogin()">লগইন করুন</button>
@@ -59,10 +81,10 @@
   </div>
 
   <div class="header">
-    <div><b style="color:#fde047;">FUNKY 64</b> | ID: <span id="displayUid">-</span></div>
+    <div><b style="color:#fde047;">FUNKY TIME</b> | ID: <span id="displayUid">-</span></div>
     <div class="points-pill">
       Points: <span id="displayPoints">0</span>
-      <button class="action-btn" id="playerReqBtn" style="background:#10b981; color:#000;" onclick="openModal('reqModal')">Request</button>
+      <button class="action-btn" id="playerReqBtn" style="background:#10b981; color:#000;" onclick="openModal('reqModal')">Deposit / Withdraw</button>
       <button class="action-btn" id="playerHistBtn" style="background:#38bdf8; color:#000;" onclick="openModal('histModal')">History</button>
       <button class="action-btn" id="ownerPanelBtn" style="display:none; background:#f59e0b; color:#000;" onclick="openModal('ownerModal')">Owner Panel</button>
     </div>
@@ -75,29 +97,44 @@
 
   <div class="status-bar" id="statusBanner">Waiting...</div>
 
-  <div class="wheel-wrap" id="wheelWrap">
-    <div class="flapper"></div>
-    <canvas id="wheelCanvas" width="400" height="400"></canvas>
+  <div class="recent-bar" id="recentBar">
+    <span style="font-size:11px; color:#94a3b8;">Last:</span>
   </div>
 
+  <div class="wheel-wrap" id="wheelWrap">
+    <div class="flapper" id="flapper"></div>
+    <div class="wait-overlay" id="waitOverlay">চলমান রাউন্ড শেষ হচ্ছে...<br>পরের রাউন্ডের জন্য অপেক্ষা করুন!</div>
+    <canvas id="wheelCanvas" width="500" height="500"></canvas>
+  </div>
   <div class="chips">
     <div class="chip active" onclick="setChip(10, this)">10</div>
     <div class="chip" style="background:#2563eb" onclick="setChip(50, this)">50</div>
     <div class="chip" style="background:#16a34a" onclick="setChip(100, this)">100</div>
     <div class="chip" style="background:#9333ea" onclick="setChip(500, this)">500</div>
-    <button class="bet-all-btn" onclick="betAll()">BET ALL</button>
   </div>
 
-  <div class="grid" id="betGrid"></div>
+  <div class="board-container">
+    <div class="board-top">
+      <div class="left-col" id="leftCol"></div>
+      <div class="letters-grid" id="lettersGrid"></div>
+      <div class="bonus-col" id="bonusCol"></div>
+    </div>
+    <div class="quick-bets">
+      <button class="q-btn" style="background:#d97706;" onclick="betGroup(['P','L','A','Y','F','U','N','K','T','I','M','E'])">ALL LETTERS</button>
+      <button class="q-btn" style="background:#2563eb;" onclick="betGroup(['BAR','DISCO','STAYIN','VIP'])">ALL BONUSES</button>
+      <button class="q-btn" style="background:#e11d48;" onclick="betAll()">BET ALL</button>
+    </div>
+  </div>
+
   <div class="modal" id="reqModal">
     <div class="modal-box">
-      <h3 style="margin-bottom:12px;">ওনারকে রিকোয়েস্ট পাঠান</h3>
+      <h3 style="margin-bottom:12px;">ওনারকে Deposit / Withdraw রিকোয়েস্ট পাঠান</h3>
       <select id="reqType" style="width:100%; padding:10px; margin-bottom:10px; border-radius:6px;">
-        <option value="ADD">Add Points (পয়েন্ট যোগ)</option>
-        <option value="DEDUCT">Deduct Points (পয়েন্ট বিয়োগ)</option>
+        <option value="ADD">Deposit (পয়েন্ট যোগ করুন)</option>
+        <option value="DEDUCT">Withdraw (পয়েন্ট উত্তোলন করুন)</option>
       </select>
       <input type="number" id="reqAmount" placeholder="পয়েন্টের পরিমাণ লিখুন" style="width:100%; padding:10px; margin-bottom:10px; border-radius:6px;">
-      <input type="text" id="reqNote" placeholder="নোট বা রেফারেন্স" style="width:100%; padding:10px; margin-bottom:12px; border-radius:6px;">
+      <input type="text" id="reqNote" placeholder="বিকাশ/নগদ নম্বর বা রেফারেন্স" style="width:100%; padding:10px; margin-bottom:12px; border-radius:6px;">
       <button class="btn btn-primary" onclick="submitPointRequest()">রিকোয়েস্ট পাঠান</button>
       <button class="btn btn-secondary" onclick="closeModals()">বন্ধ করুন</button>
     </div>
@@ -114,73 +151,199 @@
   <div class="modal" id="ownerModal">
     <div class="modal-box">
       <h3 style="color:#fde047; margin-bottom:10px;">Owner Control Panel</h3>
-      <h4 style="font-size:13px; margin-bottom:6px; color:#38bdf8;">Pending Requests:</h4>
-      <div id="ownerReqList" style="max-height:180px; overflow-y:auto; margin-bottom:12px;"></div>
+      <div class="house-box">
+        <div style="font-size:13px; color:#a7f3d0;">মোট হাউস লাভ (House Net Profit): <b id="ownerHouseProfit" style="font-size:16px; color:#fde047;">0</b></div>
+        <div style="font-size:12px; color:#cbd5e1; margin-top:4px;">মোট বেট কালেকশন: <b id="ownerTotalBets">0</b> | প্লেয়ার পে-আউট: <b id="ownerTotalPayout">0</b></div>
+      </div>
+      <h4 style="font-size:13px; margin-bottom:6px; color:#38bdf8;">Pending Deposit/Withdraw Requests:</h4>
+      <div id="ownerReqList" style="max-height:150px; overflow-y:auto; margin-bottom:12px;"></div>
       <h4 style="font-size:13px; margin-bottom:6px; color:#10b981;">All Registered Players:</h4>
-      <div id="ownerUserList" style="max-height:140px; overflow-y:auto; margin-bottom:12px;"></div>
+      <div id="ownerUserList" style="max-height:130px; overflow-y:auto; margin-bottom:12px;"></div>
       <button class="btn btn-secondary" onclick="closeModals()">বন্ধ করুন</button>
     </div>
   </div>
 
   <script>
     const socket = io();
-    let chip = 10;
     let wheelData = [];
     let payoutsData = {};
+    let selectedChip = 10;
     let myBets = {};
+    let isWaitingForNextRound = false;
 
-    const betOptions = ['1','P','L','A','Y','F','U','N','K','T','I','M','E','BAR','DISCO','STAYIN','VIP'];
+    setInterval(() => { fetch('/ping').catch(() => {}); }, 240000);
+
+    const SEGMENT_COLORS = {
+      '1': '#facc15',
+      'P': '#fb923c', 'L': '#fb923c', 'A': '#fb923c', 'Y': '#fb923c',
+      'F': '#f472b6', 'U': '#f472b6', 'N': '#f472b6', 'K': '#f472b6',
+      'T': '#c084fc', 'I': '#c084fc', 'M': '#c084fc', 'E': '#c084fc',
+      'BAR': '#a3e635',
+      'DISCO': '#60a5fa',
+      'STAYIN': '#2dd4bf',
+      'VIP': '#ef4444'
+    };
+
+    const BONUS_DISPLAY_NAMES = {
+      'BAR': 'BAR',
+      'DISCO': 'DISCO',
+      'STAYIN': "STAYIN' ALIVE",
+      'VIP': 'VIP DISCO'
+    };
+
+    function renderRecentResults(list) {
+      if (!list) return;
+      const bar = document.getElementById('recentBar');
+      bar.innerHTML = '<span style="font-size:11px; color:#94a3b8;">Last:</span>' +
+        list.map(item => `<span class="recent-pill" style="background:${SEGMENT_COLORS[item] || '#fde047'}">${item}</span>`).join('');
+    }
 
     function doLogin() {
-      socket.emit('login_user', { userId: document.getElementById('uidInput').value, password: document.getElementById('passInput').value });
+      socket.emit('login_user', {
+        userId: document.getElementById('uidInput').value,
+        password: document.getElementById('passInput').value
+      });
     }
+
     function doRegister() {
-      socket.emit('register_user', { userId: document.getElementById('uidInput').value, password: document.getElementById('passInput').value });
+      socket.emit('register_user', {
+        userId: document.getElementById('uidInput').value,
+        password: document.getElementById('passInput').value
+      });
     }
+
     function setChip(val, el) {
-      chip = val;
+      selectedChip = val;
       document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
       el.classList.add('active');
     }
+
+    function betGroup(list) {
+      list.forEach(seg => {
+        if (payoutsData[seg]) socket.emit('place_bet', { segmentId: seg, amount: selectedChip });
+      });
+    }
+
     function betAll() {
-      betOptions.forEach(opt => socket.emit('place_bet', { segmentId: opt, amount: chip }));
+      betGroup(Object.keys(payoutsData));
     }
 
     function drawWheel() {
       const canvas = document.getElementById('wheelCanvas');
       const ctx = canvas.getContext('2d');
-      const arc = (2 * Math.PI) / 64;
-      const colors = { '1': '#facc15', 'BAR': '#22c55e', 'DISCO': '#ec4899', 'STAYIN': '#06b6d4', 'VIP': '#ef4444' };
+      const cx = canvas.width / 2;
+      const cy = canvas.height / 2;
+      const radius = cx - 8;
+      const count = wheelData.length;
+      if (!count) return;
+      const arc = (2 * Math.PI) / count;
 
-      wheelData.forEach((seg, i) => {
-        const angle = i * arc - Math.PI / 2;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      for (let i = 0; i < count; i++) {
+        const angle = (i * arc) - (Math.PI / 2);
+        const label = wheelData[i];
+        const isBonus = label.length > 1;
+
         ctx.beginPath();
-        ctx.fillStyle = colors[seg] || '#8b5cf6';
-        ctx.moveTo(200, 200);
-        ctx.arc(200, 200, 195, angle, angle + arc);
+        ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, radius, angle, angle + arc);
+        ctx.fillStyle = SEGMENT_COLORS[label] || '#facc15';
         ctx.fill();
-        ctx.strokeStyle = '#111';
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 1.2;
+        ctx.strokeStyle = '#78350f';
         ctx.stroke();
 
+        if (isBonus) {
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.arc(cx, cy, radius - 4, angle + 0.008, angle + arc - 0.008);
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = label === 'VIP' ? '#fde047' : '#ffffff';
+          ctx.stroke();
+        }
+
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(angle + arc / 2);
+        ctx.textBaseline = 'middle';
+
+        if (isBonus) {
+          ctx.textAlign = 'center';
+          ctx.fillStyle = label === 'VIP' ? '#fde047' : '#1e1b4b';
+          ctx.font = label === 'STAYIN' ? '900 11.5px Arial' : '900 13.5px Arial';
+          ctx.fillText(BONUS_DISPLAY_NAMES[label] || label, radius * 0.61, 0);
+        } else {
+          ctx.rotate(Math.PI / 2);
+          ctx.textAlign = 'center';
+          ctx.fillStyle = label === '1' ? '#713f12' : '#ffffff';
+          ctx.font = '900 15px Arial';
+          ctx.fillText(label, 0, -(radius - 17));
+        }
+        ctx.restore();
+
+        const pinX = cx + Math.cos(angle) * (radius - 3);
+        const pinY = cy + Math.sin(angle) * (radius - 3);
         ctx.beginPath();
-        ctx.arc(200 + Math.cos(angle) * 188, 200 + Math.sin(angle) * 188, 3, 0, 2 * Math.PI);
-        ctx.fillStyle = '#fff';
+        ctx.arc(pinX, pinY, 2.4, 0, 2 * Math.PI);
+        ctx.fillStyle = '#fef08a';
         ctx.fill();
-      });
+      }
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, 58, 0, 2 * Math.PI);
+      ctx.fillStyle = '#7c2d12';
+      ctx.fill();
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = '#facc15';
+      ctx.stroke();
+
+      ctx.fillStyle = '#fde047';
+      ctx.font = 'italic bold 19px Georgia';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Funky', cx, cy - 10);
+      ctx.fillStyle = '#fb923c';
+      ctx.fillText('Time', cx, cy + 12);
+    }
+        function createCellHTML(seg, customTitle) {
+      const div = document.createElement('div');
+      div.className = 'cell';
+      div.style.borderColor = SEGMENT_COLORS[seg] || '#fff';
+      div.style.background = `${SEGMENT_COLORS[seg]}28`;
+      const betAmt = myBets[seg] || 0;
+      div.innerHTML = `
+        <b>${customTitle || seg}</b>
+        <span>${payoutsData[seg] || 2}x</span>
+        ${betAmt > 0 ? `<div class="badge">${betAmt}</div>` : ''}
+      `;
+      div.onclick = () => socket.emit('place_bet', { segmentId: seg, amount: selectedChip });
+      return div;
     }
 
     function renderGrid() {
-      const grid = document.getElementById('betGrid');
-      grid.innerHTML = '';
-      betOptions.forEach(opt => {
-        const amt = myBets[opt] || 0;
-        const div = document.createElement('div');
-        div.className = 'cell';
-        div.innerHTML = `${amt > 0 ? `<div class="badge">${amt}</div>` : ''}<b>${opt}</b><span>${payoutsData[opt] || 2}x</span>`;
-        div.onclick = () => socket.emit('place_bet', { segmentId: opt, amount: chip });
-        grid.appendChild(div);
+      const leftCol = document.getElementById('leftCol');
+      const lettersGrid = document.getElementById('lettersGrid');
+      const bonusCol = document.getElementById('bonusCol');
+      leftCol.innerHTML = '';
+      lettersGrid.innerHTML = '';
+      bonusCol.innerHTML = '';
+
+      const cell1 = createCellHTML('1', '1');
+      cell1.style.flex = '1.6';
+      leftCol.appendChild(cell1);
+
+      const cellBar = createCellHTML('BAR', 'BAR');
+      cellBar.style.flex = '1';
+      leftCol.appendChild(cellBar);
+
+      ['P','L','A','Y','F','U','N','K','T','I','M','E'].forEach(l => {
+        lettersGrid.appendChild(createCellHTML(l, l));
       });
+
+      bonusCol.appendChild(createCellHTML('DISCO', 'DISCO'));
+      bonusCol.appendChild(createCellHTML('STAYIN', "STAYIN' ALIVE"));
+      bonusCol.appendChild(createCellHTML('VIP', 'VIP DISCO'));
     }
 
     function openModal(id) { document.getElementById(id).style.display = 'flex'; }
@@ -205,10 +368,17 @@
       }
       el.innerHTML = list.map(h => `
         <div class="list-item">
-          <div><b>${h.type === 'ADD' ? '+ Add' : '- Deduct'} ${h.amount}</b><br><small>${h.note || ''}</small></div>
+          <div><b>${h.type === 'ADD' ? '+ Deposit' : '- Withdraw'} ${h.amount}</b><br><small>${h.note || ''}</small></div>
           <span style="color:${h.status === 'APPROVED' ? '#10b981' : h.status === 'REJECTED' ? '#ef4444' : '#facc15'}">${h.status}</span>
         </div>
       `).join('');
+    }
+
+    function updateHouseUI(stats) {
+      if (!stats) return;
+      document.getElementById('ownerHouseProfit').innerText = stats.totalHouseProfit || 0;
+      document.getElementById('ownerTotalBets').innerText = stats.totalBetsCollected || 0;
+      document.getElementById('ownerTotalPayout').innerText = stats.totalPayoutsGiven || 0;
     }
 
     function renderOwnerData(pending, users) {
@@ -217,7 +387,7 @@
         ? '<p style="color:#94a3b8; font-size:12px;">কোনো পেন্ডিং রিকোয়েস্ট নেই।</p>'
         : pending.map(r => `
           <div class="list-item">
-            <div><b>${r.userId}</b> (${r.type}: ${r.amount})<br><small>${r.note || ''}</small></div>
+            <div><b>${r.userId}</b> (${r.type === 'ADD' ? 'Deposit' : 'Withdraw'}: ${r.amount})<br><small>${r.note || ''}</small></div>
             <div>
               <button onclick="handleReq('${r._id}', 'APPROVE')" style="background:#10b981; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">✔</button>
               <button onclick="handleReq('${r._id}', 'REJECT')" style="background:#ef4444; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">✖</button>
@@ -245,6 +415,18 @@
       payoutsData = data.payouts;
       drawWheel();
       renderGrid();
+      renderRecentResults(data.recentResults);
+
+      const canvas = document.getElementById('wheelCanvas');
+      canvas.style.transition = 'none';
+      canvas.style.transform = `rotate(${data.rotation || 0}deg)`;
+
+      if (data.state === 'SPINNING') {
+        isWaitingForNextRound = true;
+        document.getElementById('waitOverlay').style.display = 'flex';
+      } else if (data.state === 'RESULT' && data.lastResult) {
+        document.getElementById('statusBanner').innerText = `WINNER: ${data.lastResult.winner} (${data.lastResult.payout}x)!`;
+      }
     });
 
     socket.on('auth_error', (msg) => document.getElementById('authMsg').innerText = msg);
@@ -259,6 +441,7 @@
         document.getElementById('playerStats').style.display = 'none';
         document.getElementById('ownerPanelBtn').style.display = 'inline-block';
         renderOwnerData(data.pendingRequests, data.allUsers);
+        updateHouseUI(data.houseStats);
       } else {
         document.getElementById('statWon').innerText = data.totalWon || 0;
         document.getElementById('statLost').innerText = data.totalLost || 0;
@@ -270,34 +453,65 @@
       document.getElementById('displayPoints').innerText = data.points;
       document.getElementById('statWon').innerText = data.totalWon;
       document.getElementById('statLost').innerText = data.totalLost;
+      if (data.lastWin && data.lastWin > 0) {
+        const toast = document.getElementById('winToast');
+        toast.innerText = `🎉 YOU WON +${data.lastWin} PTS!`;
+        toast.style.display = 'block';
+        setTimeout(() => { toast.style.display = 'none'; }, 4000);
+      }
     });
     socket.on('history_updated', (list) => renderHistory(list));
     socket.on('my_bets_updated', (bets) => { myBets = bets; renderGrid(); });
     socket.on('request_sent', (msg) => alert(msg));
-    socket.on('new_owner_request', () => alert('নতুন রিকোয়েস্ট এসেছে! Owner Panel চেক করুন।'));
+    socket.on('new_owner_request', () => alert('নতুন Deposit/Withdraw রিকোয়েস্ট এসেছে! Owner Panel চেক করুন।'));
     socket.on('refresh_owner_data', (data) => renderOwnerData(data.pending, data.allUsers));
+    socket.on('house_stats_updated', (stats) => updateHouseUI(stats));
 
     socket.on('timer_update', (data) => {
       const banner = document.getElementById('statusBanner');
       const wrap = document.getElementById('wheelWrap');
+      const flapper = document.getElementById('flapper');
       if (data.state === 'BETTING') {
-        banner.innerText = `BETTING TIME: ${data.timer}s`;
+        banner.style.background = '#10b981';
+        banner.style.color = '#000';
+        banner.innerText = `BETTING OPEN: ${data.timer}s`;
         wrap.classList.remove('zoomed');
-      } else {
+        flapper.classList.remove('ticking');
+      } else if (data.state === 'SPINNING') {
+        banner.style.background = '#ff007f';
+        banner.style.color = '#fff';
         banner.innerText = `SPINNING: ${data.timer}s`;
-        wrap.classList.add('zoomed');
+        if (!isWaitingForNextRound) {
+          wrap.classList.add('zoomed');
+          flapper.classList.add('ticking');
+        }
+      } else if (data.state === 'RESULT') {
+        banner.style.background = '#fde047';
+        banner.style.color = '#000';
+        flapper.classList.remove('ticking');
       }
     });
 
     socket.on('spin_start', (data) => {
+      isWaitingForNextRound = false;
+      document.getElementById('waitOverlay').style.display = 'none';
       const canvas = document.getElementById('wheelCanvas');
-      canvas.style.transition = `transform ${data.duration}s cubic-bezier(0.08, 0.92, 0.12, 1)`;
+      canvas.style.transition = `transform ${data.duration}s cubic-bezier(0.05, 0.88, 0.08, 1)`;
       canvas.style.transform = `rotate(${data.rotation}deg)`;
     });
 
-    socket.on('betting_start', () => { myBets = {}; renderGrid(); });
+    socket.on('betting_start', () => {
+      isWaitingForNextRound = false;
+      document.getElementById('waitOverlay').style.display = 'none';
+      myBets = {};
+      renderGrid();
+    });
+
     socket.on('round_result', (data) => {
+      isWaitingForNextRound = false;
+      document.getElementById('waitOverlay').style.display = 'none';
       document.getElementById('statusBanner').innerText = `WINNER: ${data.winner} (${data.payout}x)!`;
+      if (data.recentResults) renderRecentResults(data.recentResults);
     });
   </script>
 </body>
