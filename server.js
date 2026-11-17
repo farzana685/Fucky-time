@@ -26,6 +26,9 @@ const userSchema = new mongoose.Schema({
   userId: { type: String, unique: true, required: true },
   passwordHash: { type: String, required: true },
   points: { type: Number, default: 0, min: 0 },
+  totalDeposited: { type: Number, default: 0 },
+  requiredTurnover: { type: Number, default: 0 },
+  completedTurnover: { type: Number, default: 0 },
   totalWon: { type: Number, default: 0 },
   totalLost: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now }
@@ -67,7 +70,7 @@ const WHEEL_64 = [
 
 let onlineSockets = {};
 let currentBets = {};
-let gameState = 'BETTING'; // BETTING (10s) -> SPINNING (15s) -> RESULT (5s) = Total 30s
+let gameState = 'BETTING';
 let timer = 10;
 let currentRotation = 0;
 let lastResult = null;
@@ -76,15 +79,17 @@ let consecutiveLossRounds = 0;
 
 async function calculateSpinResult() {
   const weights = {
-    '1': 40.0, 'P': 2.5, 'L': 2.5, 'A': 2.5, 'Y': 2.5,
-    'F': 2.5, 'U': 2.5, 'N': 2.5, 'K': 2.5, 'T': 2.5,
-    'I': 2.5, 'M': 2.5, 'E': 2.5, 'BAR': 11.4, 'DISCO': 5.3,
+    '1': 38.0, 'P': 2.8, 'L': 2.8, 'A': 2.8, 'Y': 2.8,
+    'F': 2.8, 'U': 2.8, 'N': 2.8, 'K': 2.8, 'T': 2.8,
+    'I': 2.8, 'M': 2.8, 'E': 2.8, 'BAR': 12.0, 'DISCO': 5.8,
     'STAYIN': 2.0, 'VIP': 0.8
   };
 
   let totalRoundBet = 0;
   const segmentBetTotals = {};
-  for (let uId in currentBets) {
+  const activeUserIds = Object.keys(currentBets);
+
+  for (let uId of activeUserIds) {
     for (let seg in currentBets[uId]) {
       const amt = currentBets[uId][seg];
       totalRoundBet += amt;
@@ -97,18 +102,34 @@ async function calculateSpinResult() {
     const prevBets = stats ? stats.totalBetsCollected : 0;
     const prevPayouts = stats ? stats.totalPayoutsGiven : 0;
 
+    const players = await User.find({ userId: { $in: activeUserIds } });
+    let isPlayerInExcitementZone = false;
+    for (let p of players) {
+      const baseDeposit = p.totalDeposited > 0 ? p.totalDeposited : 200;
+      const excitementTarget = baseDeposit * 2.3;
+      if (p.points < excitementTarget) {
+        isPlayerInExcitementZone = true;
+        break;
+      }
+    }
+
+    const initialHouseSafetyFund = 2500;
     const cumulativeBets = prevBets + totalRoundBet;
-    const maxCumulativePayoutAllowed = cumulativeBets * 0.80;
-    const availablePayoutBudget = Math.max(totalRoundBet * 0.80, maxCumulativePayoutAllowed - prevPayouts);
+    const maxCumulativePayoutAllowed = (cumulativeBets * 0.80) + initialHouseSafetyFund;
+    const strictRemainingBudget = Math.max(totalRoundBet * 0.80, maxCumulativePayoutAllowed - prevPayouts);
 
     const safeSegments = Object.keys(PAYOUTS).filter(seg => {
       const potentialPayout = (segmentBetTotals[seg] || 0) * PAYOUTS[seg];
-      return potentialPayout <= availablePayoutBudget;
+      return potentialPayout <= strictRemainingBudget;
     });
 
-    if (consecutiveLossRounds >= 2 && safeSegments.length > 0) {
+    if ((consecutiveLossRounds >= 2 || (isPlayerInExcitementZone && Math.random() < 0.52)) && safeSegments.length > 0) {
       const winningOptions = safeSegments.filter(seg => (segmentBetTotals[seg] || 0) > 0);
       if (winningOptions.length > 0) {
+        const mediumWins = winningOptions.filter(seg => PAYOUTS[seg] >= 2 && PAYOUTS[seg] <= 25);
+        if (mediumWins.length > 0 && Math.random() < 0.70) {
+          return mediumWins[Math.floor(Math.random() * mediumWins.length)];
+        }
         return winningOptions[Math.floor(Math.random() * winningOptions.length)];
       }
     }
@@ -138,7 +159,6 @@ setInterval(async () => {
   timer--;
 
   if (gameState === 'BETTING' && timer <= 0) {
-    // ১৫ সেকেন্ডের সাসপেন্স স্পিন (অরিজিনাল গেমের মতো আস্তে আস্তে কাঙ্ক্ষিত ঘরে থামবে)
     gameState = 'SPINNING';
     timer = 15;
 
@@ -146,7 +166,6 @@ setInterval(async () => {
     const matchingIndices = WHEEL_64.map((v, i) => (v === winnerId ? i : -1)).filter(i => i !== -1);
     const targetIndex = matchingIndices[Math.floor(Math.random() * matchingIndices.length)];
     const sliceAngle = 360 / 64;
-    // সেগমেন্টের ভেতরে সামান্য র‍্যান্ডম পজিশনে থামা যাতে একদম আসল চাকার মতো মনে হয়
     const randomOffset = (Math.random() * 0.5 + 0.25) * sliceAngle;
     const targetAngle = 360 - (targetIndex * sliceAngle) - randomOffset;
 
@@ -154,7 +173,6 @@ setInterval(async () => {
     io.emit('spin_start', { rotation: currentRotation, duration: 15 });
 
   } else if (gameState === 'SPINNING' && timer <= 0) {
-    // ৫ সেকেন্ড ফলাফল প্রদর্শন (১০ + ১৫ + ৫ = মোট ৩০ সেকেন্ডের পূর্ণাঙ্গ রাউন্ড)
     gameState = 'RESULT';
     timer = 5;
 
@@ -199,10 +217,12 @@ setInterval(async () => {
       );
 
       if (updatedUser) {
+        const remTurnover = Math.max(0, (updatedUser.requiredTurnover || 0) - (updatedUser.completedTurnover || 0));
         io.to(uId).emit('points_updated', {
           points: updatedUser.points,
           totalWon: updatedUser.totalWon,
           totalLost: updatedUser.totalLost,
+          remainingTurnover: remTurnover,
           lastWin: roundUserWin
         });
       }
@@ -281,6 +301,7 @@ io.on('connection', (socket) => {
         points: 0,
         totalWon: 0,
         totalLost: 0,
+        remainingTurnover: 0,
         role: 'player',
         history: []
       });
@@ -301,7 +322,7 @@ io.on('connection', (socket) => {
         socket.join('OWNER_ROOM');
         onlineSockets[socket.id] = 'OWNER';
         const pending = await PointRequest.find({ status: 'PENDING' }).sort({ createdAt: -1 });
-        const allUsers = await User.find({}, 'userId points totalWon totalLost').sort({ points: -1 });
+        const allUsers = await User.find({}, 'userId points totalWon totalLost requiredTurnover completedTurnover').sort({ points: -1 });
         const houseStats = await HouseStats.findOneAndUpdate(
           { key: 'MAIN_HOUSE' },
           {},
@@ -324,6 +345,7 @@ io.on('connection', (socket) => {
       if (!isMatch) return socket.emit('auth_error', 'ভুল পাসওয়ার্ড!');
 
       const history = await PointRequest.find({ userId: cleanId }).sort({ createdAt: -1 }).limit(20);
+      const remTurnover = Math.max(0, (user.requiredTurnover || 0) - (user.completedTurnover || 0));
       socket.join(cleanId);
       onlineSockets[socket.id] = cleanId;
       socket.emit('auth_success', {
@@ -331,6 +353,7 @@ io.on('connection', (socket) => {
         points: user.points,
         totalWon: user.totalWon,
         totalLost: user.totalLost,
+        remainingTurnover: remTurnover,
         role: 'player',
         history
       });
@@ -348,7 +371,7 @@ io.on('connection', (socket) => {
 
     const user = await User.findOneAndUpdate(
       { userId: uId, points: { $gte: betAmount } },
-      { $inc: { points: -betAmount } },
+      { $inc: { points: -betAmount, completedTurnover: betAmount } },
       { new: true }
     );
 
@@ -357,10 +380,12 @@ io.on('connection', (socket) => {
     if (!currentBets[uId]) currentBets[uId] = {};
     currentBets[uId][segmentId] = (currentBets[uId][segmentId] || 0) + betAmount;
 
+    const remTurnover = Math.max(0, (user.requiredTurnover || 0) - (user.completedTurnover || 0));
     socket.emit('points_updated', {
       points: user.points,
       totalWon: user.totalWon,
-      totalLost: user.totalLost
+      totalLost: user.totalLost,
+      remainingTurnover: remTurnover
     });
     socket.emit('my_bets_updated', currentBets[uId]);
   });
@@ -372,10 +397,26 @@ io.on('connection', (socket) => {
     if (type !== 'ADD' && type !== 'DEDUCT') return;
 
     if (type === 'DEDUCT') {
-      const user = await User.findOne({ userId: uId });
-      if (!user || user.points < numAmt) {
+      const checkUser = await User.findOne({ userId: uId });
+      if (!checkUser || checkUser.points < numAmt) {
         return socket.emit('bet_error', 'আপনার আইডিতে এত পয়েন্ট নেই!');
       }
+      const remTurnover = Math.max(0, (checkUser.requiredTurnover || 0) - (checkUser.completedTurnover || 0));
+      if (remTurnover > 0) {
+        return socket.emit('bet_error', `উইথড্র করতে হলে আরও ${remTurnover} পয়েন্টের বেট (Turnover) খেলতে হবে!`);
+      }
+
+      const updatedUser = await User.findOneAndUpdate(
+        { userId: uId, points: { $gte: numAmt } },
+        { $inc: { points: -numAmt } },
+        { new: true }
+      );
+      socket.emit('points_updated', {
+        points: updatedUser.points,
+        totalWon: updatedUser.totalWon,
+        totalLost: updatedUser.totalLost,
+        remainingTurnover: 0
+      });
     }
 
     const reqDoc = await PointRequest.create({
@@ -387,7 +428,7 @@ io.on('connection', (socket) => {
 
     const history = await PointRequest.find({ userId: uId }).sort({ createdAt: -1 }).limit(20);
     socket.emit('history_updated', history);
-    socket.emit('request_sent', 'রিকোয়েস্ট পাঠানো হয়েছে! ওনার অ্যাপ্রুভ করলে সাথে সাথে ব্যালেন্স আপডেট হবে।');
+    socket.emit('request_sent', 'রিকোয়েস্ট পাঠানো হয়েছে! ওনার অ্যাপ্রুভ করলে সাথে সাথে কনফার্ম হবে।');
     io.to('OWNER_ROOM').emit('new_owner_request', reqDoc);
   });
 
@@ -399,41 +440,51 @@ io.on('connection', (socket) => {
 
     if (action === 'APPROVE') {
       if (reqDoc.type === 'ADD') {
+        const addedTurnover = Math.round(reqDoc.amount * 1.5);
         const updatedUser = await User.findOneAndUpdate(
           { userId: reqDoc.userId },
-          { $inc: { points: reqDoc.amount } },
+          {
+            $inc: {
+              points: reqDoc.amount,
+              totalDeposited: reqDoc.amount,
+              requiredTurnover: addedTurnover
+            }
+          },
           { new: true }
         );
         reqDoc.status = 'APPROVED';
         await reqDoc.save();
 
         if (updatedUser) {
+          const remTurnover = Math.max(0, (updatedUser.requiredTurnover || 0) - (updatedUser.completedTurnover || 0));
           io.to(reqDoc.userId).emit('points_updated', {
             points: updatedUser.points,
             totalWon: updatedUser.totalWon,
-            totalLost: updatedUser.totalLost
+            totalLost: updatedUser.totalLost,
+            remainingTurnover: remTurnover
           });
         }
       } else if (reqDoc.type === 'DEDUCT') {
-        const updatedUser = await User.findOneAndUpdate(
-          { userId: reqDoc.userId, points: { $gte: reqDoc.amount } },
-          { $inc: { points: -reqDoc.amount } },
-          { new: true }
-        );
-        if (updatedUser) {
-          reqDoc.status = 'APPROVED';
-          await reqDoc.save();
-          io.to(reqDoc.userId).emit('points_updated', {
-            points: updatedUser.points,
-            totalWon: updatedUser.totalWon,
-            totalLost: updatedUser.totalLost
-          });
-        } else {
-          reqDoc.status = 'REJECTED';
-          await reqDoc.save();
-        }
+        reqDoc.status = 'APPROVED';
+        await reqDoc.save();
       }
     } else {
+      if (reqDoc.type === 'DEDUCT') {
+        const refundedUser = await User.findOneAndUpdate(
+          { userId: reqDoc.userId },
+          { $inc: { points: reqDoc.amount } },
+          { new: true }
+        );
+        if (refundedUser) {
+          const remTurnover = Math.max(0, (refundedUser.requiredTurnover || 0) - (refundedUser.completedTurnover || 0));
+          io.to(reqDoc.userId).emit('points_updated', {
+            points: refundedUser.points,
+            totalWon: refundedUser.totalWon,
+            totalLost: refundedUser.totalLost,
+            remainingTurnover: remTurnover
+          });
+        }
+      }
       reqDoc.status = 'REJECTED';
       await reqDoc.save();
     }
@@ -442,7 +493,7 @@ io.on('connection', (socket) => {
     io.to(reqDoc.userId).emit('history_updated', history);
 
     const pending = await PointRequest.find({ status: 'PENDING' }).sort({ createdAt: -1 });
-    const allUsers = await User.find({}, 'userId points totalWon totalLost').sort({ points: -1 });
+    const allUsers = await User.find({}, 'userId points totalWon totalLost requiredTurnover completedTurnover').sort({ points: -1 });
     socket.emit('refresh_owner_data', { pending, allUsers });
   });
 
@@ -453,4 +504,4 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`Funky Studio Live 24/7 on ${PORT}`));
-        
+          
