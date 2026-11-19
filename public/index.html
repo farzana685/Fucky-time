@@ -286,7 +286,6 @@
       bar.innerHTML = '<span style="font-size:11px; color:#94a3b8;">Last:</span>' +
         list.map(item => `<span class="recent-pill" style="background:${SEGMENT_COLORS[item] || '#fff'}">${item}</span>`).join('');
     }
-
     function drawWheel() {
       const canvas = document.getElementById('wheelCanvas');
       const ctx = canvas.getContext('2d');
