@@ -74,7 +74,6 @@
     .bonus-mini-btn { background: #f59e0b; color: #000; border: none; padding: 4px 7px; border-radius: 4px; font-weight: bold; font-size: 11px; cursor: pointer; margin-left: 3px; }
   </style>
 </head>
-
 <body>
 
   <div class="privacy-shield" id="privacyShield">⚠️ নিরাপত্তা সতর্কতা!<br>এই গেমে স্ক্রিনশট বা স্ক্রিন রেকর্ডিং সম্পূর্ণ নিষিদ্ধ।</div>
@@ -95,6 +94,7 @@
       <p id="authMsg" style="color:#f87171; font-size:13px; margin-top:8px;"></p>
     </div>
   </div>
+
   <div class="header">
     <div><b style="color:#fde047;">FUNKY TIME</b> | ID: <span id="displayUid">-</span></div>
     <div class="points-pill">
@@ -144,7 +144,6 @@
     </div>
     <div class="hold-hint">💡 টিপস: বেটিং চলাকালীন কোনো ঘরে চেপে ধরলে (Hold) ওই ঘরের বেট উঠে যাবে।</div>
   </div>
-
   <div class="modal" id="reqModal">
     <div class="modal-box">
       <h3 style="margin-bottom:12px;">ওনারকে Deposit / Withdraw রিকোয়েস্ট পাঠান</h3>
@@ -545,7 +544,6 @@
     function handleReq(id, action) {
       socket.emit('owner_handle_request', { requestId: id, action });
     }
-
     socket.on('wheel_setup', (data) => {
       wheelData = data.wheel;
       payoutsData = data.payouts;
@@ -645,3 +643,23 @@
       isWaitingForNextRound = false;
       document.getElementById('waitOverlay').style.display = 'none';
       const canvas = document.getElementById('wheelCanvas');
+      canvas.style.transition = `transform ${data.duration}s cubic-bezier(0.05, 0.88, 0.08, 1)`;
+      canvas.style.transform = `rotate(${data.rotation}deg)`;
+    });
+
+    socket.on('betting_start', () => {
+      isWaitingForNextRound = false;
+      document.getElementById('waitOverlay').style.display = 'none';
+      myBets = {};
+      renderGrid();
+    });
+
+    socket.on('round_result', (data) => {
+      isWaitingForNextRound = false;
+      document.getElementById('waitOverlay').style.display = 'none';
+      document.getElementById('statusBanner').innerText = `WINNER: ${data.winner} (${data.payout}x)!`;
+      if (data.recentResults) renderRecentResults(data.recentResults);
+    });
+  </script>
+</body>
+</html>
