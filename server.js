@@ -9,7 +9,6 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-app.set('trust proxy', true);
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
@@ -32,8 +31,6 @@ const userSchema = new mongoose.Schema({
   completedTurnover: { type: Number, default: 0 },
   totalWon: { type: Number, default: 0 },
   totalLost: { type: Number, default: 0 },
-  deviceId: { type: String, default: '' },
-  ipAddress: { type: String, default: '' },
   createdAt: { type: Date, default: Date.now }
 });
 const User = mongoose.model('User', userSchema);
@@ -79,12 +76,6 @@ let currentRotation = 0;
 let lastResult = null;
 let recentResults = ['1', 'BAR', 'P', '1', 'DISCO', '1', 'F', '1', 'T', '1'];
 let consecutiveLossRounds = 0;
-
-function getClientIp(socket) {
-  const forwarded = socket.handshake.headers['x-forwarded-for'];
-  if (forwarded) return forwarded.split(',')[0].trim();
-  return socket.handshake.address || '';
-}
 
 async function calculateSpinResult() {
   const weights = {
@@ -287,55 +278,44 @@ io.on('connection', (socket) => {
     recentResults: recentResults
   });
 
-  socket.on('register_user', async ({ userId, password, deviceId }) => {
+  socket.on('register_user', async ({ userId, password }) => {
     try {
       if (typeof userId !== 'string' || typeof password !== 'string') return;
       const cleanId = userId.trim().toLowerCase();
-      if (cleanId.length < 3 || password.length < 4) {
-        return socket.emit('auth_error', 'আইডি কমপক্ষে ৩ অক্ষর এবং পাসওয়ার্ড ৪ অক্ষরের দিন।');
+
+      if (cleanId === OWNER_ID.toLowerCase()) {
+        return socket.emit('auth_error', 'এই আইডিটি সংরক্ষিত! অন্য নম্বর দিন।');
       }
-      if (
-        cleanId === OWNER_ID.toLowerCase() ||
-        cleanId.includes('owner') ||
-        cleanId.includes('admin') ||
-        cleanId.includes('mod')
-      ) {
-        return socket.emit('auth_error', 'এই আইডিটি সংরক্ষিত! অন্য ইউজার আইডি দিন।');
+
+      const bdPhoneRegex = /^01[3-9]\d{8}$/;
+      if (!bdPhoneRegex.test(cleanId)) {
+        return socket.emit('auth_error', 'সঠিক ১১ ডিজিটের বাংলাদেশি মোবাইল নম্বর দিন (যেমন: 017xxxxxxxx)!');
       }
+
+      if (password.length < 4) {
+        return socket.emit('auth_error', 'পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের দিন।');
+      }
+
       const existing = await User.findOne({ userId: cleanId });
-      if (existing) return socket.emit('auth_error', 'এই আইডি আগেই নেওয়া হয়েছে!');
-
-      const clientIp = getClientIp(socket);
-      const cleanDeviceId = (deviceId || '').toString().trim();
-
-      const ipUsed = clientIp ? await User.findOne({ ipAddress: clientIp }) : null;
-      const deviceUsed = cleanDeviceId ? await User.findOne({ deviceId: cleanDeviceId }) : null;
-
-      const isEligibleForBonus = !ipUsed && !deviceUsed;
-      const signupBonus = isEligibleForBonus ? 200 : 0;
-      const initialTurnover = isEligibleForBonus ? 300 : 0;
+      if (existing) return socket.emit('auth_error', 'এই মোবাইল নম্বর দিয়ে আগেই অ্যাকাউন্ট খোলা হয়েছে!');
 
       const hash = await bcrypt.hash(password, 10);
       const newUser = await User.create({
         userId: cleanId,
         passwordHash: hash,
-        points: signupBonus,
-        requiredTurnover: initialTurnover,
-        deviceId: cleanDeviceId,
-        ipAddress: clientIp
+        points: 200,
+        requiredTurnover: 300
       });
 
-      let history = [];
-      if (signupBonus > 0) {
-        await PointRequest.create({
-          userId: cleanId,
-          type: 'BONUS',
-          amount: 200,
-          note: 'নতুন অ্যাকাউন্ট ওয়েলকাম বোনাস (২০০ TK)',
-          status: 'APPROVED'
-        });
-        history = await PointRequest.find({ userId: cleanId }).sort({ createdAt: -1 }).limit(20);
-      }
+      await PointRequest.create({
+        userId: cleanId,
+        type: 'BONUS',
+        amount: 200,
+        note: 'নতুন অ্যাকাউন্ট ওয়েলকাম বোনাস (২০০ TK)',
+        status: 'APPROVED'
+      });
+
+      const history = await PointRequest.find({ userId: cleanId }).sort({ createdAt: -1 }).limit(20);
 
       socket.join(cleanId);
       onlineSockets[socket.id] = cleanId;
@@ -344,7 +324,7 @@ io.on('connection', (socket) => {
         points: newUser.points,
         totalWon: 0,
         totalLost: 0,
-        remainingTurnover: initialTurnover,
+        remainingTurnover: 300,
         role: 'player',
         history
       });
@@ -382,7 +362,7 @@ io.on('connection', (socket) => {
       }
 
       const user = await User.findOne({ userId: cleanId });
-      if (!user) return socket.emit('auth_error', 'এই আইডিটি খুঁজে পাওয়া যায়নি!');
+      if (!user) return socket.emit('auth_error', 'এই মোবাইল নম্বরটি খুঁজে পাওয়া যায়নি!');
 
       const isMatch = await bcrypt.compare(password, user.passwordHash);
       if (!isMatch) return socket.emit('auth_error', 'ভুল পাসওয়ার্ড!');
@@ -527,11 +507,15 @@ io.on('connection', (socket) => {
       });
     }
 
+    const finalNote = type === 'DEDUCT'
+      ? `Withdraw Number: ${uId} | ${(note || '').toString().substring(0, 40)}`
+      : (note || '').toString().substring(0, 60);
+
     const reqDoc = await PointRequest.create({
       userId: uId,
       type,
       amount: numAmt,
-      note: (note || '').toString().substring(0, 60)
+      note: finalNote
     });
 
     const history = await PointRequest.find({ userId: uId }).sort({ createdAt: -1 }).limit(20);
@@ -555,7 +539,7 @@ io.on('connection', (socket) => {
     );
 
     if (!updatedUser) {
-      return socket.emit('owner_msg', 'এই ইউজার আইডি খুঁজে পাওয়া যায়নি!');
+      return socket.emit('owner_msg', 'এই মোবাইল নম্বরটি খুঁজে পাওয়া যায়নি!');
     }
 
     await PointRequest.create({
@@ -666,4 +650,4 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`Funky Studio Live 24/7 on ${PORT}`));
-        
+          
