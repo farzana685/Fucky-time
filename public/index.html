@@ -648,10 +648,18 @@
 
     socket.on('betting_start', () => {
       isWaitingForNextRound = false;
-      document.getElementById('waitOverlay').style.display = 'none';
+       document.getElementById('waitOverlay').style.display = 'none';
       myBets = {};
       renderGrid();
     });
 
     socket.on('round_result', (data) => {
       isWaitingForNextRound = false;
+      document.getElementById('waitOverlay').style.display = 'none';
+      document.getElementById('statusBanner').innerText = `WINNER: ${data.winner} (${data.payout}x)!`;
+      if (data.recentResults) renderRecentResults(data.recentResults);
+    });
+  </script>
+</body>
+</html>
+
