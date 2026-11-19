@@ -9,6 +9,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+app.set('trust proxy', true);
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
@@ -31,6 +32,8 @@ const userSchema = new mongoose.Schema({
   completedTurnover: { type: Number, default: 0 },
   totalWon: { type: Number, default: 0 },
   totalLost: { type: Number, default: 0 },
+  deviceId: { type: String, default: '' },
+  ipAddress: { type: String, default: '' },
   createdAt: { type: Date, default: Date.now }
 });
 const User = mongoose.model('User', userSchema);
@@ -76,6 +79,12 @@ let currentRotation = 0;
 let lastResult = null;
 let recentResults = ['1', 'BAR', 'P', '1', 'DISCO', '1', 'F', '1', 'T', '1'];
 let consecutiveLossRounds = 0;
+
+function getClientIp(socket) {
+  const forwarded = socket.handshake.headers['x-forwarded-for'];
+  if (forwarded) return forwarded.split(',')[0].trim();
+  return socket.handshake.address || '';
+}
 
 async function calculateSpinResult() {
   const weights = {
@@ -278,7 +287,7 @@ io.on('connection', (socket) => {
     recentResults: recentResults
   });
 
-  socket.on('register_user', async ({ userId, password }) => {
+  socket.on('register_user', async ({ userId, password, deviceId }) => {
     try {
       if (typeof userId !== 'string' || typeof password !== 'string') return;
       const cleanId = userId.trim().toLowerCase();
@@ -296,24 +305,54 @@ io.on('connection', (socket) => {
       const existing = await User.findOne({ userId: cleanId });
       if (existing) return socket.emit('auth_error', 'এই আইডি আগেই নেওয়া হয়েছে!');
 
+      const clientIp = getClientIp(socket);
+      const cleanDeviceId = (deviceId || '').toString().trim();
+
+      const ipUsed = clientIp ? await User.findOne({ ipAddress: clientIp }) : null;
+      const deviceUsed = cleanDeviceId ? await User.findOne({ deviceId: cleanDeviceId }) : null;
+
+      const isEligibleForBonus = !ipUsed && !deviceUsed;
+      const signupBonus = isEligibleForBonus ? 200 : 0;
+      const initialTurnover = isEligibleForBonus ? 300 : 0;
+
       const hash = await bcrypt.hash(password, 10);
-      const newUser = await User.create({ userId: cleanId, passwordHash: hash, points: 0 });
+      const newUser = await User.create({
+        userId: cleanId,
+        passwordHash: hash,
+        points: signupBonus,
+        requiredTurnover: initialTurnover,
+        deviceId: cleanDeviceId,
+        ipAddress: clientIp
+      });
+
+      let history = [];
+      if (signupBonus > 0) {
+        await PointRequest.create({
+          userId: cleanId,
+          type: 'BONUS',
+          amount: 200,
+          note: 'নতুন অ্যাকাউন্ট ওয়েলকাম বোনাস (২০০ TK)',
+          status: 'APPROVED'
+        });
+        history = await PointRequest.find({ userId: cleanId }).sort({ createdAt: -1 }).limit(20);
+      }
 
       socket.join(cleanId);
       onlineSockets[socket.id] = cleanId;
       socket.emit('auth_success', {
         userId: newUser.userId,
-        points: 0,
+        points: newUser.points,
         totalWon: 0,
         totalLost: 0,
-        remainingTurnover: 0,
+        remainingTurnover: initialTurnover,
         role: 'player',
-        history: []
+        history
       });
     } catch (e) {
-      socket.emit('auth_error', 'রেজিস্ট্রেশন সমস্যা হয়েছে।');
+      socket.emit('auth_error', 'রেজিস্ট্রেশন সমস্যা হয়েছে!');
     }
   });
+
   socket.on('login_user', async ({ userId, password }) => {
     try {
       if (typeof userId !== 'string' || typeof password !== 'string') return;
@@ -362,10 +401,9 @@ io.on('connection', (socket) => {
         history
       });
     } catch (e) {
-      socket.emit('auth_error', 'লগইন ব্যর্থ হয়েছে।');
+      socket.emit('auth_error', 'লগইন ব্যর্থ হয়েছে!');
     }
   });
-
   socket.on('place_bet', async ({ segmentId, amount }) => {
     const uId = onlineSockets[socket.id];
     const betAmount = Math.floor(Number(amount));
@@ -379,7 +417,7 @@ io.on('connection', (socket) => {
       { new: true }
     );
 
-    if (!user) return socket.emit('bet_error', 'পর্যাপ্ত পয়েন্ট নেই! ওনারকে Deposit রিকোয়েস্ট পাঠান।');
+    if (!user) return socket.emit('bet_error', 'পর্যাপ্ত ব্যালেন্স নেই! অনুগ্রহ করে Deposit রিকোয়েস্ট পাঠান।');
 
     if (!currentBets[uId]) currentBets[uId] = {};
     currentBets[uId][segmentId] = (currentBets[uId][segmentId] || 0) + betAmount;
@@ -391,7 +429,73 @@ io.on('connection', (socket) => {
       totalLost: user.totalLost,
       remainingTurnover: remTurnover
     });
+
     socket.emit('my_bets_updated', currentBets[uId]);
+  });
+
+  socket.on('remove_bet', async ({ segmentId }) => {
+    const uId = onlineSockets[socket.id];
+    if (!uId || uId === 'OWNER' || gameState !== 'BETTING') return;
+    if (!currentBets[uId] || !currentBets[uId][segmentId]) return;
+
+    const refundAmount = currentBets[uId][segmentId];
+    delete currentBets[uId][segmentId];
+
+    const user = await User.findOneAndUpdate(
+      { userId: uId },
+      { $inc: { points: refundAmount, completedTurnover: -refundAmount } },
+      { new: true }
+    );
+
+    if (user) {
+      if (user.completedTurnover < 0) {
+        user.completedTurnover = 0;
+        await user.save();
+      }
+      const remTurnover = Math.max(0, (user.requiredTurnover || 0) - (user.completedTurnover || 0));
+      socket.emit('points_updated', {
+        points: user.points,
+        totalWon: user.totalWon,
+        totalLost: user.totalLost,
+        remainingTurnover: remTurnover
+      });
+    }
+    socket.emit('my_bets_updated', currentBets[uId]);
+  });
+
+  socket.on('clear_bets', async () => {
+    const uId = onlineSockets[socket.id];
+    if (!uId || uId === 'OWNER' || gameState !== 'BETTING') return;
+    if (!currentBets[uId]) return;
+
+    let totalRefund = 0;
+    for (let seg in currentBets[uId]) {
+      totalRefund += currentBets[uId][seg];
+    }
+    if (totalRefund <= 0) return;
+
+    currentBets[uId] = {};
+
+    const user = await User.findOneAndUpdate(
+      { userId: uId },
+      { $inc: { points: totalRefund, completedTurnover: -totalRefund } },
+      { new: true }
+    );
+
+    if (user) {
+      if (user.completedTurnover < 0) {
+        user.completedTurnover = 0;
+        await user.save();
+      }
+      const remTurnover = Math.max(0, (user.requiredTurnover || 0) - (user.completedTurnover || 0));
+      socket.emit('points_updated', {
+        points: user.points,
+        totalWon: user.totalWon,
+        totalLost: user.totalLost,
+        remainingTurnover: remTurnover
+      });
+    }
+    socket.emit('my_bets_updated', {});
   });
 
   socket.on('send_point_request', async ({ type, amount, note }) => {
@@ -403,11 +507,11 @@ io.on('connection', (socket) => {
     if (type === 'DEDUCT') {
       const checkUser = await User.findOne({ userId: uId });
       if (!checkUser || checkUser.points < numAmt) {
-        return socket.emit('bet_error', 'আপনার আইডিতে এত পয়েন্ট নেই!');
+        return socket.emit('bet_error', 'আপনার অ্যাকাউন্টে এত TK নেই!');
       }
       const remTurnover = Math.max(0, (checkUser.requiredTurnover || 0) - (checkUser.completedTurnover || 0));
       if (remTurnover > 0) {
-        return socket.emit('bet_error', `উইথড্র করতে হলে আরও ${remTurnover} পয়েন্টের বেট (Turnover) খেলতে হবে!`);
+        return socket.emit('bet_error', `উইথড্র করতে হলে আরও ${remTurnover} TK গেম খেলতে (Turnover) হবে!`);
       }
 
       const updatedUser = await User.findOneAndUpdate(
@@ -434,6 +538,50 @@ io.on('connection', (socket) => {
     socket.emit('history_updated', history);
     socket.emit('request_sent', 'রিকোয়েস্ট পাঠানো হয়েছে! ওনার অ্যাপ্রুভ করলে সাথে সাথে কনফার্ম হবে।');
     io.to('OWNER_ROOM').emit('new_owner_request', reqDoc);
+  });
+
+  socket.on('owner_give_bonus', async ({ targetUserId, amount }) => {
+    if (onlineSockets[socket.id] !== 'OWNER') return;
+    const bonusAmt = Math.floor(Number(amount));
+    if (!targetUserId || isNaN(bonusAmt) || bonusAmt <= 0) return;
+
+    const cleanTarget = targetUserId.trim().toLowerCase();
+    const addedTurnover = Math.round(bonusAmt * 1.5);
+
+    const updatedUser = await User.findOneAndUpdate(
+      { userId: cleanTarget },
+      { $inc: { points: bonusAmt, requiredTurnover: addedTurnover } },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      return socket.emit('owner_msg', 'এই ইউজার আইডি খুঁজে পাওয়া যায়নি!');
+    }
+
+    await PointRequest.create({
+      userId: cleanTarget,
+      type: 'BONUS',
+      amount: bonusAmt,
+      note: `অ্যাডমিন স্পেশাল বোনাস (${bonusAmt} TK)`,
+      status: 'APPROVED'
+    });
+
+    const remTurnover = Math.max(0, (updatedUser.requiredTurnover || 0) - (updatedUser.completedTurnover || 0));
+    io.to(cleanTarget).emit('points_updated', {
+      points: updatedUser.points,
+      totalWon: updatedUser.totalWon,
+      totalLost: updatedUser.totalLost,
+      remainingTurnover: remTurnover,
+      bonusReceived: bonusAmt
+    });
+
+    const history = await PointRequest.find({ userId: cleanTarget }).sort({ createdAt: -1 }).limit(20);
+    io.to(cleanTarget).emit('history_updated', history);
+
+    const pending = await PointRequest.find({ status: 'PENDING' }).sort({ createdAt: -1 });
+    const allUsers = await User.find({}, 'userId points totalWon totalLost requiredTurnover completedTurnover').sort({ points: -1 });
+    socket.emit('refresh_owner_data', { pending, allUsers });
+    socket.emit('owner_msg', `${cleanTarget}-কে সফলভাবে ${bonusAmt} TK বোনাস দেওয়া হয়েছে!`);
   });
 
   socket.on('owner_handle_request', async ({ requestId, action }) => {
