@@ -14,8 +14,9 @@
     .dynamic-watermark { position: fixed; pointer-events: none; z-index: 75; font-size: 13px; font-weight: bold; color: rgba(255, 255, 255, 0.14); transform: rotate(-20deg); transition: all 1.5s ease; }
 
     .auth-overlay { position: fixed; inset: 0; background: rgba(5, 1, 15, 0.96); display: flex; align-items: center; justify-content: center; z-index: 100; }
-    .auth-card { background: #180830; border: 2px solid #f59e0b; padding: 28px; border-radius: 16px; width: 90%; max-width: 360px; text-align: center; box-shadow: 0 0 35px rgba(245, 158, 11, 0.4); }
-    .auth-card h2 { color: #fde047; margin-bottom: 16px; }
+    .auth-card { background: #180830; border: 2px solid #f59e0b; padding: 24px; border-radius: 16px; width: 92%; max-width: 380px; text-align: center; box-shadow: 0 0 35px rgba(245, 158, 11, 0.4); }
+    .auth-card h2 { color: #fde047; margin-bottom: 10px; }
+    .orig-notice { background: rgba(250, 204, 21, 0.14); border: 1.5px solid #facc15; color: #fde047; padding: 9px; border-radius: 8px; font-size: 13px; font-weight: bold; margin-bottom: 12px; line-height: 1.4; }
     .auth-card input { width: 100%; padding: 12px; margin-bottom: 12px; border-radius: 8px; border: 1px solid #6b21a8; background: #0f0520; color: #fff; font-size: 16px; }
     .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin-bottom: 8px; font-size: 15px; }
     .btn-primary { background: linear-gradient(90deg, #ff007f, #7928ca); color: #fff; }
@@ -61,14 +62,16 @@
     .cell span { font-size: 10px; color: #fde047; }
     .badge { position: absolute; top: -6px; right: -6px; background: #10b981; color: #000; font-size: 10px; font-weight: bold; padding: 2px 5px; border-radius: 10px; }
 
-    .quick-bets { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 8px; }
-    .q-btn { padding: 9px; border: none; border-radius: 8px; font-weight: bold; font-size: 12px; cursor: pointer; color: #fff; }
+    .quick-bets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-top: 8px; }
+    .q-btn { padding: 9px 4px; border: none; border-radius: 8px; font-weight: bold; font-size: 11px; cursor: pointer; color: #fff; }
+    .hold-hint { text-align: center; font-size: 11px; color: #94a3b8; margin-top: 6px; }
 
     .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.88); align-items: center; justify-content: center; z-index: 90; }
-    .modal-box { background: #1e1b4b; border: 2px solid #38bdf8; padding: 20px; border-radius: 12px; width: 92%; max-width: 420px; }
+    .modal-box { background: #1e1b4b; border: 2px solid #38bdf8; padding: 18px; border-radius: 12px; width: 94%; max-width: 440px; max-height: 90vh; overflow-y: auto; }
     .modal-box input, .modal-box select { font-size: 16px !important; }
-    .list-item { background: #0f172a; padding: 10px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+    .list-item { background: #0f172a; padding: 10px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; gap: 6px; flex-wrap: wrap; }
     .house-box { background: linear-gradient(135deg, #064e3b, #0f172a); border: 1px solid #10b981; padding: 12px; border-radius: 8px; margin-bottom: 12px; }
+    .bonus-mini-btn { background: #f59e0b; color: #000; border: none; padding: 4px 7px; border-radius: 4px; font-weight: bold; font-size: 11px; cursor: pointer; margin-left: 3px; }
   </style>
 </head>
 
@@ -76,23 +79,26 @@
 
   <div class="privacy-shield" id="privacyShield">⚠️ নিরাপত্তা সতর্কতা!<br>এই গেমে স্ক্রিনশট বা স্ক্রিন রেকর্ডিং সম্পূর্ণ নিষিদ্ধ।</div>
   <div class="dynamic-watermark" id="userWatermark"></div>
-  <div class="win-toast" id="winToast">YOU WON +0 PTS!</div>
+  <div class="win-toast" id="winToast">YOU WON +0 TK!</div>
 
   <div class="auth-overlay" id="authBox">
     <div class="auth-card">
       <h2>FUNKY TIME LIVE</h2>
-      <input type="text" id="uidInput" placeholder="ইউজার আইডি লিখুন">
+      <div class="orig-notice">
+        ⚠️ ORIGINAL PHONE NUMBER DIYA NIBONDHON KORUN!<br>
+        <span style="font-size:11.5px; color:#fff; font-weight:normal;">আপনার আসল ১১ ডিজিটের মোবাইল নম্বর দিন। শুধু এই নম্বরেই উইথড্র পেমেন্ট করা হবে।</span>
+      </div>
+      <input type="text" id="uidInput" placeholder="১১ ডিজিটের মোবাইল নম্বর (যেমন: 017xxxxxxxx)">
       <input type="password" id="passInput" placeholder="পাসওয়ার্ড লিখুন">
       <button class="btn btn-primary" onclick="doLogin()">লগইন করুন</button>
-      <button class="btn btn-secondary" onclick="doRegister()">নতুন স্থায়ী আইডি খুলুন</button>
+      <button class="btn btn-secondary" onclick="doRegister()">নতুন অ্যাকাউন্ট খুলুন (২০০ TK বোনাস)</button>
       <p id="authMsg" style="color:#f87171; font-size:13px; margin-top:8px;"></p>
     </div>
   </div>
-
   <div class="header">
     <div><b style="color:#fde047;">FUNKY TIME</b> | ID: <span id="displayUid">-</span></div>
     <div class="points-pill">
-      Points: <span id="displayPoints">0</span>
+      TK: <span id="displayPoints">0</span>
       <button class="action-btn" id="playerReqBtn" style="background:#10b981; color:#000;" onclick="openModal('reqModal')">Deposit / Withdraw</button>
       <button class="action-btn" id="playerHistBtn" style="background:#38bdf8; color:#000;" onclick="openModal('histModal')">History</button>
       <button class="action-btn" id="ownerPanelBtn" style="display:none; background:#f59e0b; color:#000;" onclick="openModal('ownerModal')">Owner Panel</button>
@@ -100,9 +106,9 @@
   </div>
 
   <div class="stats-strip" id="playerStats">
-    <span>Won: <b id="statWon" style="color:#10b981;">0</b></span>
-    <span>Lost: <b id="statLost" style="color:#f87171;">0</b></span>
-    <span>Turnover Left: <b id="statTurnover" style="color:#fde047;">0</b></span>
+    <span>Won: <b id="statWon" style="color:#10b981;">0</b> TK</span>
+    <span>Lost: <b id="statLost" style="color:#f87171;">0</b> TK</span>
+    <span>Turnover Left: <b id="statTurnover" style="color:#fde047;">0</b> TK</span>
   </div>
 
   <div class="status-bar" id="statusBanner">Waiting...</div>
@@ -116,6 +122,7 @@
     <div class="wait-overlay" id="waitOverlay">চলমান রাউন্ড শেষ হচ্ছে...<br>পরের রাউন্ডের জন্য অপেক্ষা করুন!</div>
     <canvas id="wheelCanvas" width="500" height="500"></canvas>
   </div>
+
   <div class="chips">
     <div class="chip active" onclick="setChip(10, this)">10</div>
     <div class="chip" style="background:#2563eb" onclick="setChip(50, this)">50</div>
@@ -133,18 +140,20 @@
       <button class="q-btn" style="background:#d97706;" onclick="betGroup(['P','L','A','Y','F','U','N','K','T','I','M','E'])">ALL LETTERS</button>
       <button class="q-btn" style="background:#2563eb;" onclick="betGroup(['BAR','DISCO','STAYIN','VIP'])">ALL BONUSES</button>
       <button class="q-btn" style="background:#e11d48;" onclick="betAll()">BET ALL</button>
+      <button class="q-btn" style="background:#475569;" onclick="clearAllBets()">CLEAR BETS</button>
     </div>
+    <div class="hold-hint">💡 টিপস: বেটিং চলাকালীন কোনো ঘরে চেপে ধরলে (Hold) ওই ঘরের বেট উঠে যাবে।</div>
   </div>
 
   <div class="modal" id="reqModal">
     <div class="modal-box">
       <h3 style="margin-bottom:12px;">ওনারকে Deposit / Withdraw রিকোয়েস্ট পাঠান</h3>
-      <select id="reqType" style="width:100%; padding:10px; margin-bottom:10px; border-radius:6px;">
-        <option value="ADD">Deposit (পয়েন্ট যোগ করুন)</option>
-        <option value="DEDUCT">Withdraw (পয়েন্ট উত্তোলন করুন)</option>
+      <select id="reqType" onchange="toggleWithdrawNumber()" style="width:100%; padding:10px; margin-bottom:10px; border-radius:6px;">
+        <option value="ADD">Deposit (TK যোগ করুন)</option>
+        <option value="DEDUCT">Withdraw (TK উত্তোলন করুন)</option>
       </select>
-      <input type="number" id="reqAmount" placeholder="পয়েন্টের পরিমাণ লিখুন" style="width:100%; padding:10px; margin-bottom:10px; border-radius:6px;">
-      <input type="text" id="reqNote" placeholder="বিকাশ/নগদ নম্বর বা রেফারেন্স" style="width:100%; padding:10px; margin-bottom:12px; border-radius:6px;">
+      <input type="number" id="reqAmount" placeholder="TK-এর পরিমাণ লিখুন" style="width:100%; padding:10px; margin-bottom:10px; border-radius:6px;">
+      <input type="text" id="reqNote" placeholder="বিকাশ/নগদ নম্বর বা ট্রানজেকশন আইডি" style="width:100%; padding:10px; margin-bottom:12px; border-radius:6px;">
       <button class="btn btn-primary" onclick="submitPointRequest()">রিকোয়েস্ট পাঠান</button>
       <button class="btn btn-secondary" onclick="closeModals()">বন্ধ করুন</button>
     </div>
@@ -152,7 +161,7 @@
 
   <div class="modal" id="histModal">
     <div class="modal-box">
-      <h3 style="margin-bottom:12px;">আপনার লেনদেনের ইতিহাস</h3>
+      <h3 style="margin-bottom:12px;">আপনার লেনদেন ও বোনাসের ইতিহাস</h3>
       <div id="playerHistList" style="max-height:260px; overflow-y:auto; margin-bottom:12px;"></div>
       <button class="btn btn-secondary" onclick="closeModals()">বন্ধ করুন</button>
     </div>
@@ -162,23 +171,33 @@
     <div class="modal-box">
       <h3 style="color:#fde047; margin-bottom:10px;">Owner Control Panel</h3>
       <div class="house-box">
-        <div style="font-size:13px; color:#a7f3d0;">মোট হাউস লাভ (House Net Profit): <b id="ownerHouseProfit" style="font-size:16px; color:#fde047;">0</b></div>
-        <div style="font-size:12px; color:#cbd5e1; margin-top:4px;">মোট বেট কালেকশন: <b id="ownerTotalBets">0</b> | প্লেয়ার পে-আউট: <b id="ownerTotalPayout">0</b></div>
+        <div style="font-size:13px; color:#a7f3d0;">মোট হাউস লাভ (House Net Profit): <b id="ownerHouseProfit" style="font-size:16px; color:#fde047;">0</b> TK</div>
+        <div style="font-size:12px; color:#cbd5e1; margin-top:4px;">মোট বেট কালেকশন: <b id="ownerTotalBets">0</b> TK | প্লেয়ার পে-আউট: <b id="ownerTotalPayout">0</b> TK</div>
       </div>
+
+      <div style="background:#0f172a; padding:10px; border-radius:8px; margin-bottom:12px; border:1px solid #f59e0b;">
+        <h4 style="font-size:13px; color:#fde047; margin-bottom:6px;">প্লেয়ারকে কাস্টম বোনাস পাঠান (৫০ / ১০০ / ১৫০ TK):</h4>
+        <div style="display:flex; gap:6px; margin-bottom:6px;">
+          <input type="text" id="bonusTargetUid" placeholder="প্লেয়ার মোবাইল নম্বর" style="flex:1.4; padding:7px; border-radius:6px; border:1px solid #475569; background:#1e293b; color:#fff;">
+          <input type="number" id="bonusCustomAmt" placeholder="TK" style="flex:0.8; padding:7px; border-radius:6px; border:1px solid #475569; background:#1e293b; color:#fff;">
+        </div>
+        <button onclick="sendCustomBonus()" style="width:100%; background:#f59e0b; color:#000; border:none; padding:8px; border-radius:6px; font-weight:bold; cursor:pointer;">বোনাস পাঠান</button>
+      </div>
+
       <h4 style="font-size:13px; margin-bottom:6px; color:#38bdf8;">Pending Deposit/Withdraw Requests:</h4>
       <div id="ownerReqList" style="max-height:150px; overflow-y:auto; margin-bottom:12px;"></div>
-      <h4 style="font-size:13px; margin-bottom:6px; color:#10b981;">All Registered Players:</h4>
-      <div id="ownerUserList" style="max-height:130px; overflow-y:auto; margin-bottom:12px;"></div>
+      <h4 style="font-size:13px; margin-bottom:6px; color:#10b981;">All Registered Players (Loss & Bonus):</h4>
+      <div id="ownerUserList" style="max-height:160px; overflow-y:auto; margin-bottom:12px;"></div>
       <button class="btn btn-secondary" onclick="closeModals()">বন্ধ করুন</button>
     </div>
   </div>
-
   <script>
     const socket = io();
     let wheelData = [];
     let payoutsData = {};
     let selectedChip = 10;
     let myBets = {};
+    let currentUserId = '';
     let isWaitingForNextRound = false;
 
     setInterval(() => { fetch('/ping').catch(() => {}); }, 240000);
@@ -209,14 +228,14 @@
         wm.style.top = `${Math.floor(Math.random() * 70) + 15}%`;
         wm.style.left = `${Math.floor(Math.random() * 60) + 10}%`;
       }
-    }, 4000);
+    }, 5000);
 
     const SEGMENT_COLORS = {
       '1': '#facc15',
       'P': '#fb923c', 'L': '#fb923c', 'A': '#fb923c', 'Y': '#fb923c',
       'F': '#f472b6', 'U': '#f472b6', 'N': '#f472b6', 'K': '#f472b6',
       'T': '#c084fc', 'I': '#c084fc', 'M': '#c084fc', 'E': '#c084fc',
-      'BAR': '#a3e635',
+      'BAR': '#4ade80',
       'DISCO': '#60a5fa',
       'STAYIN': '#2dd4bf',
       'VIP': '#ef4444'
@@ -228,13 +247,6 @@
       'STAYIN': "STAYIN' ALIVE",
       'VIP': 'VIP DISCO'
     };
-
-    function renderRecentResults(list) {
-      if (!list) return;
-      const bar = document.getElementById('recentBar');
-      bar.innerHTML = '<span style="font-size:11px; color:#94a3b8;">Last:</span>' +
-        list.map(item => `<span class="recent-pill" style="background:${SEGMENT_COLORS[item] || '#fde047'}">${item}</span>`).join('');
-    }
 
     function doLogin() {
       socket.emit('login_user', {
@@ -257,31 +269,37 @@
     }
 
     function betGroup(list) {
-      list.forEach(seg => {
-        if (payoutsData[seg]) socket.emit('place_bet', { segmentId: seg, amount: selectedChip });
-      });
+      list.forEach(seg => socket.emit('place_bet', { segmentId: seg, amount: selectedChip }));
     }
 
     function betAll() {
-      betGroup(Object.keys(payoutsData));
+      Object.keys(payoutsData).forEach(seg => socket.emit('place_bet', { segmentId: seg, amount: selectedChip }));
+    }
+
+    function clearAllBets() {
+      socket.emit('clear_bets');
+    }
+
+    function renderRecentResults(list) {
+      const bar = document.getElementById('recentBar');
+      if (!bar || !list) return;
+      bar.innerHTML = '<span style="font-size:11px; color:#94a3b8;">Last:</span>' +
+        list.map(item => `<span class="recent-pill" style="background:${SEGMENT_COLORS[item] || '#fff'}">${item}</span>`).join('');
     }
 
     function drawWheel() {
       const canvas = document.getElementById('wheelCanvas');
       const ctx = canvas.getContext('2d');
-      const cx = canvas.width / 2;
-      const cy = canvas.height / 2;
-      const radius = cx - 8;
-      const count = wheelData.length;
-      if (!count) return;
-      const arc = (2 * Math.PI) / count;
+      const cx = 250, cy = 250, radius = 242;
+      const total = wheelData.length || 64;
+      const arc = (2 * Math.PI) / total;
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.clearRect(0, 0, 500, 500);
 
-      for (let i = 0; i < count; i++) {
-        const angle = (i * arc) - (Math.PI / 2);
+      for (let i = 0; i < total; i++) {
         const label = wheelData[i];
-        const isBonus = label.length > 1;
+        const angle = i * arc - Math.PI / 2;
+        const isBonus = ['BAR', 'DISCO', 'STAYIN', 'VIP'].includes(label);
 
         ctx.beginPath();
         ctx.moveTo(cx, cy);
@@ -344,6 +362,7 @@
       ctx.fillStyle = '#fb923c';
       ctx.fillText('Time', cx, cy + 12);
     }
+
     function createCellHTML(seg, customTitle) {
       const div = document.createElement('div');
       div.className = 'cell';
@@ -355,7 +374,38 @@
         <span>${payoutsData[seg] || 2}x</span>
         ${betAmt > 0 ? `<div class="badge">${betAmt}</div>` : ''}
       `;
-      div.onclick = () => socket.emit('place_bet', { segmentId: seg, amount: selectedChip });
+
+      let pressTimer = null;
+      let isLongPress = false;
+
+      const startHold = () => {
+        isLongPress = false;
+        pressTimer = setTimeout(() => {
+          isLongPress = true;
+          if (myBets[seg] && myBets[seg] > 0) {
+            socket.emit('remove_bet', { segmentId: seg });
+          }
+        }, 550);
+      };
+
+      const cancelHold = () => {
+        if (pressTimer) clearTimeout(pressTimer);
+      };
+
+      div.addEventListener('touchstart', startHold, { passive: true });
+      div.addEventListener('touchend', cancelHold);
+      div.addEventListener('touchmove', cancelHold);
+      div.addEventListener('mousedown', startHold);
+      div.addEventListener('mouseup', cancelHold);
+      div.addEventListener('mouseleave', cancelHold);
+
+      div.onclick = () => {
+        if (isLongPress) {
+          isLongPress = false;
+          return;
+        }
+        socket.emit('place_bet', { segmentId: seg, amount: selectedChip });
+      };
       return div;
     }
 
@@ -383,10 +433,29 @@
       bonusCol.appendChild(createCellHTML('STAYIN', "STAYIN' ALIVE"));
       bonusCol.appendChild(createCellHTML('VIP', 'VIP DISCO'));
     }
+    function openModal(id) {
+      document.getElementById(id).style.display = 'flex';
+      if (id === 'reqModal') toggleWithdrawNumber();
+    }
 
-    function openModal(id) { document.getElementById(id).style.display = 'flex'; }
     function closeModals() {
       document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
+    }
+
+    function toggleWithdrawNumber() {
+      const type = document.getElementById('reqType').value;
+      const noteInput = document.getElementById('reqNote');
+      if (type === 'DEDUCT') {
+        noteInput.value = currentUserId;
+        noteInput.readOnly = true;
+        noteInput.style.background = '#334155';
+        noteInput.style.color = '#fde047';
+      } else {
+        noteInput.value = '';
+        noteInput.readOnly = false;
+        noteInput.style.background = '#fff';
+        noteInput.style.color = '#000';
+      }
     }
 
     function submitPointRequest() {
@@ -404,12 +473,15 @@
         el.innerHTML = '<p style="color:#94a3b8;">কোনো ইতিহাস নেই।</p>';
         return;
       }
-      el.innerHTML = list.map(h => `
-        <div class="list-item">
-          <div><b>${h.type === 'ADD' ? '+ Deposit' : '- Withdraw'} ${h.amount}</b><br><small>${h.note || ''}</small></div>
-          <span style="color:${h.status === 'APPROVED' ? '#10b981' : h.status === 'REJECTED' ? '#ef4444' : '#facc15'}">${h.status}</span>
-        </div>
-      `).join('');
+      el.innerHTML = list.map(h => {
+        const label = h.type === 'ADD' ? '+ Deposit' : h.type === 'BONUS' ? '🎁 Bonus' : '- Withdraw';
+        return `
+          <div class="list-item">
+            <div><b>${label} ${h.amount} TK</b><br><small>${h.note || ''}</small></div>
+            <span style="color:${h.status === 'APPROVED' ? '#10b981' : h.status === 'REJECTED' ? '#ef4444' : '#facc15'}">${h.status}</span>
+          </div>
+        `;
+      }).join('');
     }
 
     function updateHouseUI(stats) {
@@ -419,13 +491,27 @@
       document.getElementById('ownerTotalPayout').innerText = stats.totalPayoutsGiven || 0;
     }
 
+    function giveQuickBonus(uid, amt) {
+      if (confirm(`${uid} নম্বর প্লেয়ারকে ${amt} TK বোনাস দিতে চান?`)) {
+        socket.emit('owner_give_bonus', { targetUserId: uid, amount: amt });
+      }
+    }
+
+    function sendCustomBonus() {
+      const uid = document.getElementById('bonusTargetUid').value;
+      const amt = document.getElementById('bonusCustomAmt').value;
+      if (!uid || !amt) return alert('মোবাইল নম্বর এবং টাকার পরিমাণ লিখুন!');
+      socket.emit('owner_give_bonus', { targetUserId: uid, amount: amt });
+      document.getElementById('bonusCustomAmt').value = '';
+    }
+
     function renderOwnerData(pending, users) {
       const reqEl = document.getElementById('ownerReqList');
       reqEl.innerHTML = (!pending || pending.length === 0)
         ? '<p style="color:#94a3b8; font-size:12px;">কোনো পেন্ডিং রিকোয়েস্ট নেই।</p>'
         : pending.map(r => `
           <div class="list-item">
-            <div><b>${r.userId}</b> (${r.type === 'ADD' ? 'Deposit' : 'Withdraw'}: ${r.amount})<br><small>${r.note || ''}</small></div>
+            <div><b>${r.userId}</b> (${r.type === 'ADD' ? 'Deposit' : 'Withdraw'}: ${r.amount} TK)<br><small>${r.note || ''}</small></div>
             <div>
               <button onclick="handleReq('${r._id}', 'APPROVE')" style="background:#10b981; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">✔</button>
               <button onclick="handleReq('${r._id}', 'REJECT')" style="background:#ef4444; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">✖</button>
@@ -440,8 +526,15 @@
           const remT = Math.max(0, (u.requiredTurnover || 0) - (u.completedTurnover || 0));
           return `
             <div class="list-item">
-              <span><b>${u.userId}</b></span>
-              <span>Pts: <b>${u.points}</b> | TO Left:${remT}</span>
+              <div>
+                <b>${u.userId}</b><br>
+                <small style="color:#cbd5e1;">TK: <b>${u.points}</b> | Won: <span style="color:#10b981;">${u.totalWon || 0}</span> | Lost: <span style="color:#f87171;">${u.totalLost || 0}</span> | TO: ${remT}</small>
+              </div>
+              <div>
+                <button class="bonus-mini-btn" onclick="giveQuickBonus('${u.userId}', 50)">+50</button>
+                <button class="bonus-mini-btn" onclick="giveQuickBonus('${u.userId}', 100)">+100</button>
+                <button class="bonus-mini-btn" onclick="giveQuickBonus('${u.userId}', 150)">+150</button>
+              </div>
             </div>
           `;
         }).join('');
@@ -472,7 +565,9 @@
 
     socket.on('auth_error', (msg) => document.getElementById('authMsg').innerText = msg);
     socket.on('bet_error', (msg) => alert(msg));
+    socket.on('owner_msg', (msg) => alert(msg));
     socket.on('auth_success', (data) => {
+      currentUserId = data.userId;
       document.getElementById('authBox').style.display = 'none';
       document.getElementById('displayUid').innerText = data.userId;
       document.getElementById('displayPoints').innerText = data.points;
@@ -500,7 +595,13 @@
       }
       if (data.lastWin && data.lastWin > 0) {
         const toast = document.getElementById('winToast');
-        toast.innerText = `🎉 YOU WON +${data.lastWin} PTS!`;
+        toast.innerText = `🎉 YOU WON +${data.lastWin} TK!`;
+        toast.style.display = 'block';
+        setTimeout(() => { toast.style.display = 'none'; }, 4000);
+      }
+      if (data.bonusReceived && data.bonusReceived > 0) {
+        const toast = document.getElementById('winToast');
+        toast.innerText = `🎁 BONUS RECEIVED +${data.bonusReceived} TK!`;
         toast.style.display = 'block';
         setTimeout(() => { toast.style.display = 'none'; }, 4000);
       }
@@ -555,10 +656,3 @@
 
     socket.on('round_result', (data) => {
       isWaitingForNextRound = false;
-      document.getElementById('waitOverlay').style.display = 'none';
-      document.getElementById('statusBanner').innerText = `WINNER: ${data.winner} (${data.payout}x)!`;
-      if (data.recentResults) renderRecentResults(data.recentResults);
-    });
-  </script>
-</body>
-</html>
