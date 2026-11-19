@@ -186,7 +186,7 @@
 
       <h4 style="font-size:13px; margin-bottom:6px; color:#38bdf8;">Pending Deposit/Withdraw Requests:</h4>
       <div id="ownerReqList" style="max-height:150px; overflow-y:auto; margin-bottom:12px;"></div>
-      <h4 style="font-size:13px; margin-bottom:6px; color:#10b981;">All Registered Players (Loss & Bonus):</h4>
+      <h4 style="font-size:13px; margin-bottom:6px; color:#10b981;">All Registered Players (Online Top / Offline Bottom):</h4>
       <div id="ownerUserList" style="max-height:160px; overflow-y:auto; margin-bottom:12px;"></div>
       <button class="btn btn-secondary" onclick="closeModals()">বন্ধ করুন</button>
     </div>
@@ -523,10 +523,13 @@
         ? '<p style="color:#94a3b8; font-size:12px;">কোনো প্লেয়ার নেই।</p>'
         : users.map(u => {
           const remT = Math.max(0, (u.requiredTurnover || 0) - (u.completedTurnover || 0));
+          const statusBadge = u.isOnline
+            ? '<span style="background:#064e3b; color:#34d399; padding:2px 6px; border-radius:10px; font-size:10px; margin-left:4px;">🟢 ONLINE</span>'
+            : '<span style="background:#1e293b; color:#94a3b8; padding:2px 6px; border-radius:10px; font-size:10px; margin-left:4px;">⚫ OFFLINE</span>';
           return `
-            <div class="list-item">
+            <div class="list-item" style="border-left: 3px solid ${u.isOnline ? '#10b981' : '#475569'};">
               <div>
-                <b>${u.userId}</b><br>
+                <b>${u.userId}</b> ${statusBadge}<br>
                 <small style="color:#cbd5e1;">TK: <b>${u.points}</b> | Won: <span style="color:#10b981;">${u.totalWon || 0}</span> | Lost: <span style="color:#f87171;">${u.totalLost || 0}</span> | TO: ${remT}</small>
               </div>
               <div>
@@ -642,24 +645,3 @@
       isWaitingForNextRound = false;
       document.getElementById('waitOverlay').style.display = 'none';
       const canvas = document.getElementById('wheelCanvas');
-      canvas.style.transition = `transform ${data.duration}s cubic-bezier(0.05, 0.88, 0.08, 1)`;
-      canvas.style.transform = `rotate(${data.rotation}deg)`;
-    });
-
-    socket.on('betting_start', () => {
-      isWaitingForNextRound = false;
-       document.getElementById('waitOverlay').style.display = 'none';
-      myBets = {};
-      renderGrid();
-    });
-
-    socket.on('round_result', (data) => {
-      isWaitingForNextRound = false;
-      document.getElementById('waitOverlay').style.display = 'none';
-      document.getElementById('statusBanner').innerText = `WINNER: ${data.winner} (${data.payout}x)!`;
-      if (data.recentResults) renderRecentResults(data.recentResults);
-    });
-  </script>
-</body>
-</html>
-
