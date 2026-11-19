@@ -77,6 +77,19 @@ let lastResult = null;
 let recentResults = ['1', 'BAR', 'P', '1', 'DISCO', '1', 'F', '1', 'T', '1'];
 let consecutiveLossRounds = 0;
 
+async function getSortedUsersForOwner() {
+  const activeUserSet = new Set(Object.values(onlineSockets));
+  const rawUsers = await User.find({}, 'userId points totalWon totalLost requiredTurnover completedTurnover').sort({ points: -1 }).lean();
+  return rawUsers
+    .map(u => ({ ...u, isOnline: activeUserSet.has(u.userId) }))
+    .sort((a, b) => (Number(b.isOnline) - Number(a.isOnline)) || (b.points - a.points));
+}
+
+async function broadcastOwnerUsers() {
+  const pending = await PointRequest.find({ status: 'PENDING' }).sort({ createdAt: -1 });
+  const allUsers = await getSortedUsersForOwner();
+  io.to('OWNER_ROOM').emit('refresh_owner_data', { pending, allUsers });
+}
 async function calculateSpinResult() {
   const weights = {
     '1': 38.0, 'P': 2.8, 'L': 2.8, 'A': 2.8, 'Y': 2.8,
@@ -252,6 +265,7 @@ setInterval(async () => {
         { upsert: true, new: true }
       );
       io.to('OWNER_ROOM').emit('house_stats_updated', houseStats);
+      await broadcastOwnerUsers();
     }
 
     currentBets = {};
@@ -266,7 +280,6 @@ setInterval(async () => {
 
   io.emit('timer_update', { state: gameState, timer: timer });
 }, 1000);
-
 io.on('connection', (socket) => {
   socket.emit('wheel_setup', {
     wheel: WHEEL_64,
@@ -319,6 +332,8 @@ io.on('connection', (socket) => {
 
       socket.join(cleanId);
       onlineSockets[socket.id] = cleanId;
+      await broadcastOwnerUsers();
+
       socket.emit('auth_success', {
         userId: newUser.userId,
         points: newUser.points,
@@ -345,7 +360,7 @@ io.on('connection', (socket) => {
         socket.join('OWNER_ROOM');
         onlineSockets[socket.id] = 'OWNER';
         const pending = await PointRequest.find({ status: 'PENDING' }).sort({ createdAt: -1 });
-        const allUsers = await User.find({}, 'userId points totalWon totalLost requiredTurnover completedTurnover').sort({ points: -1 });
+        const allUsers = await getSortedUsersForOwner();
         const houseStats = await HouseStats.findOneAndUpdate(
           { key: 'MAIN_HOUSE' },
           {},
@@ -371,6 +386,8 @@ io.on('connection', (socket) => {
       const remTurnover = Math.max(0, (user.requiredTurnover || 0) - (user.completedTurnover || 0));
       socket.join(cleanId);
       onlineSockets[socket.id] = cleanId;
+      await broadcastOwnerUsers();
+
       socket.emit('auth_success', {
         userId: user.userId,
         points: user.points,
@@ -384,6 +401,7 @@ io.on('connection', (socket) => {
       socket.emit('auth_error', 'লগইন ব্যর্থ হয়েছে!');
     }
   });
+
   socket.on('place_bet', async ({ segmentId, amount }) => {
     const uId = onlineSockets[socket.id];
     const betAmount = Math.floor(Number(amount));
@@ -477,7 +495,6 @@ io.on('connection', (socket) => {
     }
     socket.emit('my_bets_updated', {});
   });
-
   socket.on('send_point_request', async ({ type, amount, note }) => {
     const uId = onlineSockets[socket.id];
     const numAmt = Math.floor(Number(amount));
@@ -562,9 +579,7 @@ io.on('connection', (socket) => {
     const history = await PointRequest.find({ userId: cleanTarget }).sort({ createdAt: -1 }).limit(20);
     io.to(cleanTarget).emit('history_updated', history);
 
-    const pending = await PointRequest.find({ status: 'PENDING' }).sort({ createdAt: -1 });
-    const allUsers = await User.find({}, 'userId points totalWon totalLost requiredTurnover completedTurnover').sort({ points: -1 });
-    socket.emit('refresh_owner_data', { pending, allUsers });
+    await broadcastOwnerUsers();
     socket.emit('owner_msg', `${cleanTarget}-কে সফলভাবে ${bonusAmt} TK বোনাস দেওয়া হয়েছে!`);
   });
 
@@ -637,17 +652,14 @@ io.on('connection', (socket) => {
 
     const history = await PointRequest.find({ userId: reqDoc.userId }).sort({ createdAt: -1 }).limit(20);
     io.to(reqDoc.userId).emit('history_updated', history);
-
-    const pending = await PointRequest.find({ status: 'PENDING' }).sort({ createdAt: -1 });
-    const allUsers = await User.find({}, 'userId points totalWon totalLost requiredTurnover completedTurnover').sort({ points: -1 });
-    socket.emit('refresh_owner_data', { pending, allUsers });
+    await broadcastOwnerUsers();
   });
 
-  socket.on('disconnect', () => {
+  socket.on('disconnect', async () => {
     delete onlineSockets[socket.id];
+    await broadcastOwnerUsers();
   });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`Funky Studio Live 24/7 on ${PORT}`));
-          
