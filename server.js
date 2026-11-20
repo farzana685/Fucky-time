@@ -167,6 +167,7 @@ async function calculateSpinResult() {
   }
   return '1';
 }
+
 setInterval(async () => {
   timer--;
 
@@ -227,7 +228,6 @@ setInterval(async () => {
         },
         { new: true }
       );
-
       if (updatedUser) {
         if (updatedUser.points < 10 && updatedUser.requiredTurnover > updatedUser.completedTurnover) {
           updatedUser.requiredTurnover = 0;
@@ -280,6 +280,7 @@ setInterval(async () => {
 
   io.emit('timer_update', { state: gameState, timer: timer });
 }, 1000);
+
 io.on('connection', (socket) => {
   socket.emit('wheel_setup', {
     wheel: WHEEL_64,
@@ -302,7 +303,7 @@ io.on('connection', (socket) => {
 
       const bdPhoneRegex = /^01[3-9]\d{8}$/;
       if (!bdPhoneRegex.test(cleanId)) {
-        return socket.emit('auth_error', 'সঠিক ১১ ডিজিটের বাংলাদেশি মোবাইল নম্বর দিন (যেমন: 017xxxxxxxx)!');
+        return socket.emit('auth_error', 'সঠিক ১১ ডিজিটের বাংলাদেশি মোবাইল নম্বর দিন (যেমন: 017xxxxxxxx)।');
       }
 
       if (password.length < 4) {
@@ -310,22 +311,16 @@ io.on('connection', (socket) => {
       }
 
       const existing = await User.findOne({ userId: cleanId });
-      if (existing) return socket.emit('auth_error', 'এই মোবাইল নম্বর দিয়ে আগেই অ্যাকাউন্ট খোলা হয়েছে!');
+      if (existing) {
+        return socket.emit('auth_error', 'এই নম্বরটি দিয়ে ইতিমধ্যে অ্যাকাউন্ট খোলা আছে!');
+      }
 
-      const hash = await bcrypt.hash(password, 10);
+      const passwordHash = await bcrypt.hash(password, 10);
       const newUser = await User.create({
         userId: cleanId,
-        passwordHash: hash,
-        points: 200,
-        requiredTurnover: 300
-      });
-
-      await PointRequest.create({
-        userId: cleanId,
-        type: 'BONUS',
-        amount: 200,
-        note: 'নতুন অ্যাকাউন্ট ওয়েলকাম বোনাস (২০০ TK)',
-        status: 'APPROVED'
+        passwordHash,
+        points: 0,
+        requiredTurnover: 0
       });
 
       const history = await PointRequest.find({ userId: cleanId }).sort({ createdAt: -1 }).limit(20);
@@ -339,7 +334,7 @@ io.on('connection', (socket) => {
         points: newUser.points,
         totalWon: 0,
         totalLost: 0,
-        remainingTurnover: 300,
+        remainingTurnover: 0,
         role: 'player',
         history
       });
@@ -347,7 +342,6 @@ io.on('connection', (socket) => {
       socket.emit('auth_error', 'রেজিস্ট্রেশন সমস্যা হয়েছে!');
     }
   });
-
   socket.on('login_user', async ({ userId, password }) => {
     try {
       if (typeof userId !== 'string' || typeof password !== 'string') return;
@@ -377,7 +371,7 @@ io.on('connection', (socket) => {
       }
 
       const user = await User.findOne({ userId: cleanId });
-      if (!user) return socket.emit('auth_error', 'এই মোবাইল নম্বরটি খুঁজে পাওয়া যায়নি!');
+      if (!user) return socket.emit('auth_error', 'এই নম্বরে কোনো অ্যাকাউন্ট পাওয়া যায়নি!');
 
       const isMatch = await bcrypt.compare(password, user.passwordHash);
       if (!isMatch) return socket.emit('auth_error', 'ভুল পাসওয়ার্ড!');
@@ -403,22 +397,22 @@ io.on('connection', (socket) => {
   });
 
   socket.on('place_bet', async ({ segmentId, amount }) => {
-    const uId = onlineSockets[socket.id];
+    const uid = onlineSockets[socket.id];
     const betAmount = Math.floor(Number(amount));
 
-    if (!uId || uId === 'OWNER' || gameState !== 'BETTING') return;
+    if (!uid || uid === 'OWNER' || gameState !== 'BETTING') return;
     if (!PAYOUTS[segmentId] || isNaN(betAmount) || betAmount <= 0) return;
 
     const user = await User.findOneAndUpdate(
-      { userId: uId, points: { $gte: betAmount } },
+      { userId: uid, points: { $gte: betAmount } },
       { $inc: { points: -betAmount, completedTurnover: betAmount } },
       { new: true }
     );
 
     if (!user) return socket.emit('bet_error', 'পর্যাপ্ত ব্যালেন্স নেই! অনুগ্রহ করে Deposit রিকোয়েস্ট পাঠান।');
 
-    if (!currentBets[uId]) currentBets[uId] = {};
-    currentBets[uId][segmentId] = (currentBets[uId][segmentId] || 0) + betAmount;
+    if (!currentBets[uid]) currentBets[uid] = {};
+    currentBets[uid][segmentId] = (currentBets[uid][segmentId] || 0) + betAmount;
 
     const remTurnover = Math.max(0, (user.requiredTurnover || 0) - (user.completedTurnover || 0));
     socket.emit('points_updated', {
@@ -428,19 +422,19 @@ io.on('connection', (socket) => {
       remainingTurnover: remTurnover
     });
 
-    socket.emit('my_bets_updated', currentBets[uId]);
+    socket.emit('my_bets_updated', currentBets[uid]);
   });
 
   socket.on('remove_bet', async ({ segmentId }) => {
-    const uId = onlineSockets[socket.id];
-    if (!uId || uId === 'OWNER' || gameState !== 'BETTING') return;
-    if (!currentBets[uId] || !currentBets[uId][segmentId]) return;
+    const uid = onlineSockets[socket.id];
+    if (!uid || uid === 'OWNER' || gameState !== 'BETTING') return;
+    if (!currentBets[uid] || !currentBets[uid][segmentId]) return;
 
-    const refundAmount = currentBets[uId][segmentId];
-    delete currentBets[uId][segmentId];
+    const refundAmount = currentBets[uid][segmentId];
+    delete currentBets[uid][segmentId];
 
     const user = await User.findOneAndUpdate(
-      { userId: uId },
+      { userId: uid },
       { $inc: { points: refundAmount, completedTurnover: -refundAmount } },
       { new: true }
     );
@@ -458,24 +452,23 @@ io.on('connection', (socket) => {
         remainingTurnover: remTurnover
       });
     }
-    socket.emit('my_bets_updated', currentBets[uId]);
+    socket.emit('my_bets_updated', currentBets[uid]);
   });
-
   socket.on('clear_bets', async () => {
-    const uId = onlineSockets[socket.id];
-    if (!uId || uId === 'OWNER' || gameState !== 'BETTING') return;
-    if (!currentBets[uId]) return;
+    const uid = onlineSockets[socket.id];
+    if (!uid || uid === 'OWNER' || gameState !== 'BETTING') return;
+    if (!currentBets[uid]) return;
 
     let totalRefund = 0;
-    for (let seg in currentBets[uId]) {
-      totalRefund += currentBets[uId][seg];
+    for (let seg in currentBets[uid]) {
+      totalRefund += currentBets[uid][seg];
     }
     if (totalRefund <= 0) return;
 
-    currentBets[uId] = {};
+    currentBets[uid] = {};
 
     const user = await User.findOneAndUpdate(
-      { userId: uId },
+      { userId: uid },
       { $inc: { points: totalRefund, completedTurnover: -totalRefund } },
       { new: true }
     );
@@ -495,16 +488,17 @@ io.on('connection', (socket) => {
     }
     socket.emit('my_bets_updated', {});
   });
+
   socket.on('send_point_request', async ({ type, amount, note }) => {
-    const uId = onlineSockets[socket.id];
+    const uid = onlineSockets[socket.id];
     const numAmt = Math.floor(Number(amount));
-    if (!uId || uId === 'OWNER' || isNaN(numAmt) || numAmt <= 0) return;
+    if (!uid || uid === 'OWNER' || isNaN(numAmt) || numAmt <= 0) return;
     if (type !== 'ADD' && type !== 'DEDUCT') return;
 
     if (type === 'DEDUCT') {
-      const checkUser = await User.findOne({ userId: uId });
+      const checkUser = await User.findOne({ userId: uid });
       if (!checkUser || checkUser.points < numAmt) {
-        return socket.emit('bet_error', 'আপনার অ্যাকাউন্টে এত TK নেই!');
+        return socket.emit('bet_error', 'আপনার একাউন্টে এত TK নেই!');
       }
       const remTurnover = Math.max(0, (checkUser.requiredTurnover || 0) - (checkUser.completedTurnover || 0));
       if (remTurnover > 0) {
@@ -512,7 +506,7 @@ io.on('connection', (socket) => {
       }
 
       const updatedUser = await User.findOneAndUpdate(
-        { userId: uId, points: { $gte: numAmt } },
+        { userId: uid, points: { $gte: numAmt } },
         { $inc: { points: -numAmt } },
         { new: true }
       );
@@ -525,19 +519,19 @@ io.on('connection', (socket) => {
     }
 
     const finalNote = type === 'DEDUCT'
-      ? `Withdraw Number: ${uId} | ${(note || '').toString().substring(0, 40)}`
+      ? `Withdraw Number: ${uid} | ${(note || '').toString().substring(0, 40)}`
       : (note || '').toString().substring(0, 60);
 
     const reqDoc = await PointRequest.create({
-      userId: uId,
+      userId: uid,
       type,
       amount: numAmt,
       note: finalNote
     });
 
-    const history = await PointRequest.find({ userId: uId }).sort({ createdAt: -1 }).limit(20);
+    const history = await PointRequest.find({ userId: uid }).sort({ createdAt: -1 }).limit(20);
     socket.emit('history_updated', history);
-    socket.emit('request_sent', 'রিকোয়েস্ট পাঠানো হয়েছে! ওনার অ্যাপ্রুভ করলে সাথে সাথে কনফার্ম হবে।');
+    socket.emit('request_sent', 'রিকোয়েস্ট পাঠানো হয়েছে! ওনার অ্যাপ্রুভ করলে সাথে সাথে ব্যালেন্স কনফার্ম হবে।');
     io.to('OWNER_ROOM').emit('new_owner_request', reqDoc);
   });
 
@@ -582,7 +576,6 @@ io.on('connection', (socket) => {
     await broadcastOwnerUsers();
     socket.emit('owner_msg', `${cleanTarget}-কে সফলভাবে ${bonusAmt} TK বোনাস দেওয়া হয়েছে!`);
   });
-
   socket.on('owner_handle_request', async ({ requestId, action }) => {
     if (onlineSockets[socket.id] !== 'OWNER') return;
 
@@ -591,18 +584,22 @@ io.on('connection', (socket) => {
 
     if (action === 'APPROVE') {
       if (reqDoc.type === 'ADD') {
-        const addedTurnover = Math.round(reqDoc.amount * 1.5);
         const existingUser = await User.findOne({ userId: reqDoc.userId });
+        const isFirstDeposit = existingUser && (existingUser.totalDeposited === 0);
+        const welcomeBonus = (isFirstDeposit && reqDoc.amount >= 300) ? 200 : 0;
+
+        const totalCredit = reqDoc.amount + welcomeBonus;
+        const addedTurnover = Math.round((reqDoc.amount * 2) + (welcomeBonus * 3));
         const hasZeroBalance = !existingUser || existingUser.points < 10;
 
         const updateQuery = hasZeroBalance
           ? {
-              $inc: { points: reqDoc.amount, totalDeposited: reqDoc.amount },
+              $inc: { points: totalCredit, totalDeposited: reqDoc.amount },
               $set: { requiredTurnover: addedTurnover, completedTurnover: 0 }
             }
           : {
               $inc: {
-                points: reqDoc.amount,
+                points: totalCredit,
                 totalDeposited: reqDoc.amount,
                 requiredTurnover: addedTurnover
               }
@@ -613,6 +610,17 @@ io.on('connection', (socket) => {
           updateQuery,
           { new: true }
         );
+
+        if (welcomeBonus > 0) {
+          await PointRequest.create({
+            userId: reqDoc.userId,
+            type: 'BONUS',
+            amount: welcomeBonus,
+            note: 'প্রথম ডিপোজিট ওয়েলকাম বোনাস (২০০ TK)',
+            status: 'APPROVED'
+          });
+        }
+
         reqDoc.status = 'APPROVED';
         await reqDoc.save();
 
@@ -622,7 +630,8 @@ io.on('connection', (socket) => {
             points: updatedUser.points,
             totalWon: updatedUser.totalWon,
             totalLost: updatedUser.totalLost,
-            remainingTurnover: remTurnover
+            remainingTurnover: remTurnover,
+            bonusReceived: welcomeBonus > 0 ? welcomeBonus : undefined
           });
         }
       } else if (reqDoc.type === 'DEDUCT') {
