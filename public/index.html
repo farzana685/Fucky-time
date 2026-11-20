@@ -23,9 +23,9 @@
     .btn-primary { background: linear-gradient(90deg, #ff007f, #7928ca); color: #fff; }
     .btn-secondary { background: #334155; color: #fff; }
 
-    .header { width: 100%; padding: 10px 16px; background: rgba(0,0,0,0.88); border-bottom: 2px solid #ff007f; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
-    .points-pill { background: #1e1b4b; border: 1px solid #38bdf8; padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 14px; }
-    .action-btn { border: none; padding: 6px 10px; border-radius: 6px; font-weight: bold; cursor: pointer; margin-left: 6px; font-size: 12px; }
+    .header { width: 100%; padding: 10px 14px; background: rgba(0,0,0,0.88); border-bottom: 2px solid #ff007f; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; }
+    .points-pill { background: #1e1b4b; border: 1px solid #38bdf8; padding: 6px 10px; border-radius: 20px; font-weight: bold; font-size: 13px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+    .action-btn { border: none; padding: 5px 8px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 11px; }
 
     .stats-strip { display: flex; gap: 12px; font-size: 12px; color: #cbd5e1; margin-top: 6px; flex-wrap: wrap; justify-content: center; }
     .status-bar { margin: 8px 0; padding: 8px 24px; border-radius: 25px; background: #ff007f; font-weight: bold; font-size: 15px; text-align: center; box-shadow: 0 0 15px rgba(255,0,127,0.5); }
@@ -99,8 +99,9 @@
   <div class="header">
     <div><b style="color:#fde047;">FUNKY TIME</b> | ID: <span id="displayUid">-</span></div>
     <div class="points-pill">
-      TK: <span id="displayPoints">0</span>
-      <button class="action-btn" id="playerReqBtn" style="background:#10b981; color:#000;" onclick="openModal('reqModal')">Deposit / Withdraw</button>
+      <span>TK: <b id="displayPoints">0</b></span>
+      <button class="action-btn" id="playerReqBtn" style="background:#10b981; color:#000;" onclick="openModal('reqModal')">Deposit/Withdraw</button>
+      <button class="action-btn" id="playerTransferBtn" style="background:#f59e0b; color:#000;" onclick="openModal('transferModal')">Send Money</button>
       <button class="action-btn" id="playerHistBtn" style="background:#38bdf8; color:#000;" onclick="openModal('histModal')">History</button>
       <button class="action-btn" id="ownerPanelBtn" style="display:none; background:#f59e0b; color:#000;" onclick="openModal('ownerModal')">Owner Panel</button>
     </div>
@@ -149,7 +150,7 @@
     </div>
     <div class="hold-hint">💡 টিপস: বেটিং চলাকালীন কোনো ঘরে চেপে ধরলে (Hold) ওই ঘরের বেট উঠে যাবে।</div>
   </div>
-
+  <!-- Deposit / Withdraw Modal -->
   <div class="modal" id="reqModal">
     <div class="modal-box">
       <h3 style="margin-bottom:8px;">ওনারকে Deposit / Withdraw রিকোয়েস্ট পাঠান</h3>
@@ -166,6 +167,25 @@
       <button class="btn btn-secondary" onclick="closeModals()">বন্ধ করুন</button>
     </div>
   </div>
+
+  <!-- Player-to-Player Send Money Modal (Min 500 TK) -->
+  <div class="modal" id="transferModal">
+    <div class="modal-box" style="border-color: #f59e0b;">
+      <h3 style="color:#fde047; margin-bottom:8px;">💸 প্লেয়ার টু প্লেয়ার Send Money</h3>
+      <div style="background:rgba(245,158,11,0.16); border:1px solid #f59e0b; color:#fde68a; padding:8px; border-radius:6px; font-size:12px; margin-bottom:10px; line-height:1.4;">
+        • সর্বনিম্ন <b>৫০০ TK</b> ট্রান্সফার করা যাবে।<br>
+        • যে টাকা পাবে তার ওনারের কাছে উইথড্র করতে <b>২ গুণ টার্নওভার</b> খেলতে হবে।<br>
+        • ট্রান্সফার হিস্টোরি <b>৬ ঘণ্টা পর অটো-ডিলিট</b> হয়ে যাবে (সমস্যা হলে ৬ ঘণ্টার মধ্যে যোগাযোগ করুন)।
+      </div>
+      <input type="text" id="transferRecId" placeholder="প্রাপক প্লেয়ারের ১১ ডিজিটের মোবাইল নম্বর" style="width:100%; padding:10px; margin-bottom:10px; border-radius:6px; border:1px solid #475569; background:#0f172a; color:#fff;">
+      <input type="number" id="transferAmt" placeholder="টাকার পরিমাণ (সর্বনিম্ন ৫০০ TK)" style="width:100%; padding:10px; margin-bottom:10px; border-radius:6px; border:1px solid #475569; background:#0f172a; color:#fff;">
+      <input type="password" id="transferPass" placeholder="আপনার অ্যাকাউন্টের পাসওয়ার্ড দিন" style="width:100%; padding:10px; margin-bottom:12px; border-radius:6px; border:1px solid #475569; background:#0f172a; color:#fff;">
+      <button class="btn btn-primary" id="transferSubmitBtn" style="background:linear-gradient(90deg, #f59e0b, #d97706); color:#000;" onclick="submitTransfer()">নিশ্চিত করে পাঠান</button>
+      <button class="btn btn-secondary" onclick="closeModals()">বন্ধ করুন</button>
+    </div>
+  </div>
+
+  <!-- Player History Modal -->
   <div class="modal" id="histModal">
     <div class="modal-box">
       <h3 style="margin-bottom:12px;">আপনার লেনদেন ও বোনাসের ইতিহাস</h3>
@@ -173,7 +193,7 @@
       <button class="btn btn-secondary" onclick="closeModals()">বন্ধ করুন</button>
     </div>
   </div>
-
+  <!-- Owner Control Panel Modal -->
   <div class="modal" id="ownerModal">
     <div class="modal-box">
       <h3 style="color:#fde047; margin-bottom:10px;">Owner Control Panel</h3>
@@ -237,7 +257,6 @@
         wm.style.left = `${Math.floor(Math.random() * 60) + 10}%`;
       }
     }, 5000);
-
     const SEGMENT_COLORS = {
       '1': '#facc15',
       'P': '#fb923c', 'L': '#fb923c', 'A': '#fb923c', 'Y': '#fb923c',
@@ -255,6 +274,7 @@
       'STAYIN': "STAYIN' ALIVE",
       'VIP': 'VIP DISCO'
     };
+
     function doLogin() {
       socket.emit('login_user', {
         userId: document.getElementById('uidInput').value,
@@ -276,11 +296,11 @@
     }
 
     function betGroup(list) {
-      list.forEach(seg => socket.emit('place_bet', { segmentId: seg, amount: selectedChip }));
+      list.forEach(seg => socket.emit('place_bet', { segment: seg, segmentId: seg, amount: selectedChip }));
     }
 
     function betAll() {
-      Object.keys(payoutsData).forEach(seg => socket.emit('place_bet', { segmentId: seg, amount: selectedChip }));
+      Object.keys(payoutsData).forEach(seg => socket.emit('place_bet', { segment: seg, segmentId: seg, amount: selectedChip }));
     }
 
     function clearAllBets() {
@@ -293,7 +313,6 @@
       bar.innerHTML = '<span style="font-size:11px; color:#94a3b8;">Last:</span>' +
         list.map(item => `<span class="recent-pill" style="background:${SEGMENT_COLORS[item] || '#fff'}">${item}</span>`).join('');
     }
-
     function drawWheel() {
       const canvas = document.getElementById('wheelCanvas');
       const ctx = canvas.getContext('2d');
@@ -368,7 +387,6 @@
       ctx.fillStyle = '#fb923c';
       ctx.fillText('Time', cx, cy + 12);
     }
-
     function createCellHTML(seg, customTitle) {
       const div = document.createElement('div');
       div.className = 'cell';
@@ -410,7 +428,7 @@
           isLongPress = false;
           return;
         }
-        socket.emit('place_bet', { segmentId: seg, amount: selectedChip });
+        socket.emit('place_bet', { segment: seg, segmentId: seg, amount: selectedChip });
       };
       return div;
     }
@@ -439,7 +457,6 @@
       bonusCol.appendChild(createCellHTML('STAYIN', "STAYIN' ALIVE"));
       bonusCol.appendChild(createCellHTML('VIP', 'VIP DISCO'));
     }
-
     function openModal(id) {
       document.getElementById(id).style.display = 'flex';
       if (id === 'reqModal') toggleWithdrawNumber();
@@ -448,6 +465,7 @@
     function closeModals() {
       document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
     }
+
     function toggleWithdrawNumber() {
       const type = document.getElementById('reqType').value;
       const noteInput = document.getElementById('reqNote');
@@ -473,6 +491,32 @@
       closeModals();
     }
 
+    function submitTransfer() {
+      const recId = document.getElementById('transferRecId').value.trim();
+      const amt = Number(document.getElementById('transferAmt').value);
+      const pass = document.getElementById('transferPass').value;
+
+      if (!recId || recId.length !== 11) {
+        return alert('সঠিক ১১ ডিজিটের প্রাপক মোবাইল নম্বর দিন!');
+      }
+      if (!amt || amt < 500) {
+        return alert('সর্বনিম্ন ৫০০ TK ট্রান্সফার করা যাবে!');
+      }
+      if (!pass) {
+        return alert('নিরাপত্তার জন্য আপনার পাসওয়ার্ড দিন!');
+      }
+
+      const btn = document.getElementById('transferSubmitBtn');
+      btn.disabled = true;
+      btn.innerText = 'পাঠানো হচ্ছে...';
+
+      socket.emit('transfer_points', {
+        recipientId: recId,
+        amount: amt,
+        password: pass
+      });
+    }
+
     function renderHistory(list) {
       const el = document.getElementById('playerHistList');
       if (!list || list.length === 0) {
@@ -480,7 +524,12 @@
         return;
       }
       el.innerHTML = list.map(h => {
-        const label = h.type === 'ADD' ? '+ Deposit' : h.type === 'BONUS' ? '🎁 Bonus' : '- Withdraw';
+        let label = '- Withdraw';
+        if (h.type === 'ADD') label = '+ Deposit';
+        else if (h.type === 'BONUS') label = '🎁 Bonus';
+        else if (h.type === 'TRANSFER_OUT') label = '📤 Send Money';
+        else if (h.type === 'TRANSFER_IN') label = '📥 Receive Money';
+
         return `
           <div class="list-item">
             <div><b>${label} ${h.amount} TK</b><br><small>${h.note || ''}</small></div>
@@ -489,7 +538,6 @@
         `;
       }).join('');
     }
-
     function updateHouseUI(stats) {
       if (!stats) return;
       document.getElementById('ownerHouseProfit').innerText = stats.totalHouseProfit || 0;
@@ -555,10 +603,10 @@
           `;
         }).join('');
     }
+
     function handleReq(id, action) {
       socket.emit('owner_handle_request', { requestId: id, action });
     }
-
     socket.on('wheel_setup', (data) => {
       wheelData = data.wheel;
       payoutsData = data.payouts;
@@ -581,18 +629,36 @@
     socket.on('auth_error', (msg) => document.getElementById('authMsg').innerText = msg);
     socket.on('bet_error', (msg) => alert(msg));
     socket.on('owner_msg', (msg) => alert(msg));
+
+    socket.on('transfer_error', (msg) => {
+      const btn = document.getElementById('transferSubmitBtn');
+      if (btn) { btn.disabled = false; btn.innerText = 'নিশ্চিত করে পাঠান'; }
+      alert('❌ ' + msg);
+    });
+
+    socket.on('transfer_success', (msg) => {
+      const btn = document.getElementById('transferSubmitBtn');
+      if (btn) { btn.disabled = false; btn.innerText = 'নিশ্চিত করে পাঠান'; }
+      document.getElementById('transferRecId').value = '';
+      document.getElementById('transferAmt').value = '';
+      document.getElementById('transferPass').value = '';
+      closeModals();
+      alert('✅ ' + msg);
+    });
+
     socket.on('auth_success', (data) => {
       currentUserId = data.userId;
       document.getElementById('authBox').style.display = 'none';
       document.getElementById('displayUid').innerText = data.userId;
-      document.getElementById('displayPoints').innerText = data.points;
+      document.getElementById('displayPoints').innerText = data.points || 0;
       if (data.role === 'owner') {
         document.getElementById('playerReqBtn').style.display = 'none';
+        document.getElementById('playerTransferBtn').style.display = 'none';
         document.getElementById('playerHistBtn').style.display = 'none';
         document.getElementById('playerStats').style.display = 'none';
         document.getElementById('promoBanner').style.display = 'none';
         document.getElementById('ownerPanelBtn').style.display = 'inline-block';
-        renderOwnerData(data.pendingRequests, data.allUsers);
+        renderOwnerData(data.pending || data.pendingRequests, data.allUsers);
         updateHouseUI(data.houseStats);
       } else {
         document.getElementById('statWon').innerText = data.totalWon || 0;
@@ -601,7 +667,6 @@
         renderHistory(data.history);
       }
     });
-
     socket.on('points_updated', (data) => {
       document.getElementById('displayPoints').innerText = data.points;
       document.getElementById('statWon').innerText = data.totalWon;
@@ -622,6 +687,7 @@
         setTimeout(() => { toast.style.display = 'none'; }, 4000);
       }
     });
+
     socket.on('history_updated', (list) => renderHistory(list));
     socket.on('my_bets_updated', (bets) => { myBets = bets; renderGrid(); });
     socket.on('request_sent', (msg) => alert(msg));
