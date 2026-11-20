@@ -31,6 +31,7 @@ const userSchema = new mongoose.Schema({
   completedTurnover: { type: Number, default: 0 },
   totalWon: { type: Number, default: 0 },
   totalLost: { type: Number, default: 0 },
+  lastSeen: { type: Date, default: Date.now },
   createdAt: { type: Date, default: Date.now }
 });
 const User = mongoose.model('User', userSchema);
@@ -77,11 +78,27 @@ let lastResult = null;
 let recentResults = ['1', 'BAR', 'P', '1', 'DISCO', '1', 'F', '1', 'T', '1'];
 let consecutiveLossRounds = 0;
 
+function formatBDTime(dateObj) {
+  if (!dateObj) return 'N/A';
+  return new Date(dateObj).toLocaleString('en-GB', {
+    timeZone: 'Asia/Dhaka',
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  });
+}
+
 async function getSortedUsersForOwner() {
   const activeUserSet = new Set(Object.values(onlineSockets));
-  const rawUsers = await User.find({}, 'userId points totalWon totalLost requiredTurnover completedTurnover').sort({ points: -1 }).lean();
+  const rawUsers = await User.find({}, 'userId points totalWon totalLost requiredTurnover completedTurnover lastSeen').sort({ points: -1 }).lean();
   return rawUsers
-    .map(u => ({ ...u, isOnline: activeUserSet.has(u.userId) }))
+    .map(u => ({
+      ...u,
+      isOnline: activeUserSet.has(u.userId),
+      lastSeenText: formatBDTime(u.lastSeen)
+    }))
     .sort((a, b) => (Number(b.isOnline) - Number(a.isOnline)) || (b.points - a.points));
 }
 
@@ -320,7 +337,8 @@ io.on('connection', (socket) => {
         userId: cleanId,
         passwordHash,
         points: 0,
-        requiredTurnover: 0
+        requiredTurnover: 0,
+        lastSeen: new Date()
       });
 
       const history = await PointRequest.find({ userId: cleanId }).sort({ createdAt: -1 }).limit(20);
@@ -341,118 +359,6 @@ io.on('connection', (socket) => {
     } catch (e) {
       socket.emit('auth_error', 'রেজিস্ট্রেশন সমস্যা হয়েছে!');
     }
-  });
-  socket.on('login_user', async ({ userId, password }) => {
-    try {
-      if (typeof userId !== 'string' || typeof password !== 'string') return;
-      const cleanId = userId.trim().toLowerCase();
-
-      if (cleanId === OWNER_ID.toLowerCase()) {
-        if (password !== OWNER_PASS) {
-          return socket.emit('auth_error', 'ভুল পাসওয়ার্ড! শুধুমাত্র ওনার প্রবেশ করতে পারবেন।');
-        }
-        socket.join('OWNER_ROOM');
-        onlineSockets[socket.id] = 'OWNER';
-        const pending = await PointRequest.find({ status: 'PENDING' }).sort({ createdAt: -1 });
-        const allUsers = await getSortedUsersForOwner();
-        const houseStats = await HouseStats.findOneAndUpdate(
-          { key: 'MAIN_HOUSE' },
-          {},
-          { upsert: true, new: true }
-        );
-        return socket.emit('auth_success', {
-          userId: OWNER_ID,
-          points: 999999,
-          role: 'owner',
-          pendingRequests: pending,
-          allUsers,
-          houseStats
-        });
-      }
-
-      const user = await User.findOne({ userId: cleanId });
-      if (!user) return socket.emit('auth_error', 'এই নম্বরে কোনো অ্যাকাউন্ট পাওয়া যায়নি!');
-
-      const isMatch = await bcrypt.compare(password, user.passwordHash);
-      if (!isMatch) return socket.emit('auth_error', 'ভুল পাসওয়ার্ড!');
-
-      const history = await PointRequest.find({ userId: cleanId }).sort({ createdAt: -1 }).limit(20);
-      const remTurnover = Math.max(0, (user.requiredTurnover || 0) - (user.completedTurnover || 0));
-      socket.join(cleanId);
-      onlineSockets[socket.id] = cleanId;
-      await broadcastOwnerUsers();
-
-      socket.emit('auth_success', {
-        userId: user.userId,
-        points: user.points,
-        totalWon: user.totalWon,
-        totalLost: user.totalLost,
-        remainingTurnover: remTurnover,
-        role: 'player',
-        history
-      });
-    } catch (e) {
-      socket.emit('auth_error', 'লগইন ব্যর্থ হয়েছে!');
-    }
-  });
-
-  socket.on('place_bet', async ({ segmentId, amount }) => {
-    const uid = onlineSockets[socket.id];
-    const betAmount = Math.floor(Number(amount));
-
-    if (!uid || uid === 'OWNER' || gameState !== 'BETTING') return;
-    if (!PAYOUTS[segmentId] || isNaN(betAmount) || betAmount <= 0) return;
-
-    const user = await User.findOneAndUpdate(
-      { userId: uid, points: { $gte: betAmount } },
-      { $inc: { points: -betAmount, completedTurnover: betAmount } },
-      { new: true }
-    );
-
-    if (!user) return socket.emit('bet_error', 'পর্যাপ্ত ব্যালেন্স নেই! অনুগ্রহ করে Deposit রিকোয়েস্ট পাঠান।');
-
-    if (!currentBets[uid]) currentBets[uid] = {};
-    currentBets[uid][segmentId] = (currentBets[uid][segmentId] || 0) + betAmount;
-
-    const remTurnover = Math.max(0, (user.requiredTurnover || 0) - (user.completedTurnover || 0));
-    socket.emit('points_updated', {
-      points: user.points,
-      totalWon: user.totalWon,
-      totalLost: user.totalLost,
-      remainingTurnover: remTurnover
-    });
-
-    socket.emit('my_bets_updated', currentBets[uid]);
-  });
-
-  socket.on('remove_bet', async ({ segmentId }) => {
-    const uid = onlineSockets[socket.id];
-    if (!uid || uid === 'OWNER' || gameState !== 'BETTING') return;
-    if (!currentBets[uid] || !currentBets[uid][segmentId]) return;
-
-    const refundAmount = currentBets[uid][segmentId];
-    delete currentBets[uid][segmentId];
-
-    const user = await User.findOneAndUpdate(
-      { userId: uid },
-      { $inc: { points: refundAmount, completedTurnover: -refundAmount } },
-      { new: true }
-    );
-
-    if (user) {
-      if (user.completedTurnover < 0) {
-        user.completedTurnover = 0;
-        await user.save();
-      }
-      const remTurnover = Math.max(0, (user.requiredTurnover || 0) - (user.completedTurnover || 0));
-      socket.emit('points_updated', {
-        points: user.points,
-        totalWon: user.totalWon,
-        totalLost: user.totalLost,
-        remainingTurnover: remTurnover
-      });
-    }
-    socket.emit('my_bets_updated', currentBets[uid]);
   });
   socket.on('clear_bets', async () => {
     const uid = onlineSockets[socket.id];
@@ -541,7 +447,7 @@ io.on('connection', (socket) => {
     if (!targetUserId || isNaN(bonusAmt) || bonusAmt <= 0) return;
 
     const cleanTarget = targetUserId.trim().toLowerCase();
-    const addedTurnover = Math.round(bonusAmt * 1.5);
+    const addedTurnover = Math.round(bonusAmt * 5);
 
     const updatedUser = await User.findOneAndUpdate(
       { userId: cleanTarget },
@@ -576,6 +482,24 @@ io.on('connection', (socket) => {
     await broadcastOwnerUsers();
     socket.emit('owner_msg', `${cleanTarget}-কে সফলভাবে ${bonusAmt} TK বোনাস দেওয়া হয়েছে!`);
   });
+  socket.on('owner_delete_user', async ({ targetUserId }) => {
+    if (onlineSockets[socket.id] !== 'OWNER' || !targetUserId) return;
+    const cleanTarget = targetUserId.trim().toLowerCase();
+
+    await User.deleteOne({ userId: cleanTarget });
+    await PointRequest.deleteMany({ userId: cleanTarget });
+
+    for (let sId in onlineSockets) {
+      if (onlineSockets[sId] === cleanTarget) {
+        io.to(sId).emit('auth_error', 'আপনার অ্যাকাউন্টটি অ্যাডমিন দ্বারা মুছে ফেলা হয়েছে।');
+        delete onlineSockets[sId];
+      }
+    }
+
+    await broadcastOwnerUsers();
+    socket.emit('owner_msg', `${cleanTarget} আইডি এবং এর সব হিস্টোরি স্থায়ীভাবে মুছে ফেলা হয়েছে!`);
+  });
+
   socket.on('owner_handle_request', async ({ requestId, action }) => {
     if (onlineSockets[socket.id] !== 'OWNER') return;
 
@@ -665,7 +589,11 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', async () => {
+    const uid = onlineSockets[socket.id];
     delete onlineSockets[socket.id];
+    if (uid && uid !== 'OWNER') {
+      await User.updateOne({ userId: uid }, { $set: { lastSeen: new Date() } });
+    }
     await broadcastOwnerUsers();
   });
 });
