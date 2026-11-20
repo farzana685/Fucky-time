@@ -12,6 +12,7 @@ const io = new Server(server);
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
+// UptimeRobot 24/7 Live Keep-Alive Route
 app.get('/ping', (req, res) => res.status(200).send('OK - FUNKY STUDIO 24/7 LIVE'));
 
 const MONGO_URI = process.env.MONGO_URI || 'YOUR_MONGODB_URI';
@@ -217,7 +218,6 @@ setInterval(async () => {
 
     let totalRoundBets = 0;
     let totalRoundPayouts = 0;
-
     for (let uId in currentBets) {
       const userBets = currentBets[uId];
       let roundUserBet = 0;
@@ -309,6 +309,7 @@ io.on('connection', (socket) => {
     recentResults: recentResults
   });
 
+  // 1. Register New Player
   socket.on('register_user', async ({ userId, password }) => {
     try {
       if (typeof userId !== 'string' || typeof password !== 'string') return;
@@ -331,7 +332,6 @@ io.on('connection', (socket) => {
       if (existing) {
         return socket.emit('auth_error', 'এই নম্বরটি দিয়ে ইতিমধ্যে অ্যাকাউন্ট খোলা আছে!');
       }
-
       const passwordHash = await bcrypt.hash(password, 10);
       const newUser = await User.create({
         userId: cleanId,
@@ -360,6 +360,122 @@ io.on('connection', (socket) => {
       socket.emit('auth_error', 'রেজিস্ট্রেশন সমস্যা হয়েছে!');
     }
   });
+
+  // 2. Login Existing Player & Owner
+  socket.on('login_user', async ({ userId, password }) => {
+    try {
+      if (typeof userId !== 'string' || typeof password !== 'string') return;
+      const cleanId = userId.trim().toLowerCase();
+
+      if (!cleanId || !password) {
+        return socket.emit('auth_error', 'আইডি এবং পাসওয়ার্ড দিন!');
+      }
+
+      // Check Owner Login
+      if (cleanId === OWNER_ID.toLowerCase()) {
+        if (password !== OWNER_PASS) {
+          return socket.emit('auth_error', 'ভুল ওনার পাসওয়ার্ড দিয়েছেন!');
+        }
+
+        socket.join('OWNER_ROOM');
+        onlineSockets[socket.id] = 'OWNER';
+
+        const pending = await PointRequest.find({ status: 'PENDING' }).sort({ createdAt: -1 });
+        const allUsers = await getSortedUsersForOwner();
+        const houseStats = await HouseStats.findOne({ key: 'MAIN_HOUSE' }) || {
+          totalHouseProfit: 0,
+          totalBetsCollected: 0,
+          totalPayoutsGiven: 0
+        };
+
+        socket.emit('auth_success', {
+          userId: OWNER_ID,
+          role: 'owner',
+          pending,
+          allUsers,
+          houseStats
+        });
+        socket.emit('refresh_owner_data', { pending, allUsers });
+        socket.emit('house_stats_updated', houseStats);
+        return;
+      }
+
+      // Check Player Login
+      const user = await User.findOne({ userId: cleanId });
+      if (!user) {
+        return socket.emit('auth_error', 'এই নম্বর দিয়ে কোনো অ্যাকাউন্ট খোলা নেই!');
+      }
+
+      const isMatch = await bcrypt.compare(password, user.passwordHash);
+      if (!isMatch) {
+        return socket.emit('auth_error', 'ভুল পাসওয়ার্ড দিয়েছেন!');
+      }
+
+      user.lastSeen = new Date();
+      await user.save();
+
+      const history = await PointRequest.find({ userId: cleanId }).sort({ createdAt: -1 }).limit(20);
+      const remTurnover = Math.max(0, (user.requiredTurnover || 0) - (user.completedTurnover || 0));
+
+      socket.join(cleanId);
+      onlineSockets[socket.id] = cleanId;
+      await broadcastOwnerUsers();
+
+      socket.emit('auth_success', {
+        userId: user.userId,
+        points: user.points,
+        totalWon: user.totalWon || 0,
+        totalLost: user.totalLost || 0,
+        remainingTurnover: remTurnover,
+        role: 'player',
+        history
+      });
+    } catch (e) {
+      socket.emit('auth_error', 'লগইন সমস্যা হয়েছে! আবার চেষ্টা করুন।');
+    }
+  });
+  // 3. Place Bet
+  socket.on('place_bet', async ({ segment, amount }) => {
+    try {
+      const uid = onlineSockets[socket.id];
+      if (!uid || uid === 'OWNER') return;
+
+      if (gameState !== 'BETTING') {
+        return socket.emit('bet_error', 'বেট ধরার সময় শেষ!');
+      }
+
+      const betAmt = Math.floor(Number(amount));
+      if (!PAYOUTS[segment] || isNaN(betAmt) || betAmt <= 0) {
+        return socket.emit('bet_error', 'সঠিক পরিমাণ বেট ধরুন!');
+      }
+
+      const updatedUser = await User.findOneAndUpdate(
+        { userId: uid, points: { $gte: betAmt } },
+        { $inc: { points: -betAmt, completedTurnover: betAmt } },
+        { new: true }
+      );
+
+      if (!updatedUser) {
+        return socket.emit('bet_error', 'আপনার একাউন্টে পর্যাপ্ত TK নেই!');
+      }
+
+      if (!currentBets[uid]) currentBets[uid] = {};
+      currentBets[uid][segment] = (currentBets[uid][segment] || 0) + betAmt;
+
+      const remTurnover = Math.max(0, (updatedUser.requiredTurnover || 0) - (updatedUser.completedTurnover || 0));
+      socket.emit('points_updated', {
+        points: updatedUser.points,
+        totalWon: updatedUser.totalWon,
+        totalLost: updatedUser.totalLost,
+        remainingTurnover: remTurnover
+      });
+      socket.emit('my_bets_updated', currentBets[uid]);
+    } catch (e) {
+      socket.emit('bet_error', 'বেট ধরতে সমস্যা হয়েছে!');
+    }
+  });
+
+  // 4. Clear Bets
   socket.on('clear_bets', async () => {
     const uid = onlineSockets[socket.id];
     if (!uid || uid === 'OWNER' || gameState !== 'BETTING') return;
@@ -395,6 +511,7 @@ io.on('connection', (socket) => {
     socket.emit('my_bets_updated', {});
   });
 
+  // 5. Deposit / Withdraw Request
   socket.on('send_point_request', async ({ type, amount, note }) => {
     const uid = onlineSockets[socket.id];
     const numAmt = Math.floor(Number(amount));
@@ -440,7 +557,7 @@ io.on('connection', (socket) => {
     socket.emit('request_sent', 'রিকোয়েস্ট পাঠানো হয়েছে! ওনার অ্যাপ্রুভ করলে সাথে সাথে ব্যালেন্স কনফার্ম হবে।');
     io.to('OWNER_ROOM').emit('new_owner_request', reqDoc);
   });
-
+  // 6. Owner Give Bonus
   socket.on('owner_give_bonus', async ({ targetUserId, amount }) => {
     if (onlineSockets[socket.id] !== 'OWNER') return;
     const bonusAmt = Math.floor(Number(amount));
@@ -482,6 +599,8 @@ io.on('connection', (socket) => {
     await broadcastOwnerUsers();
     socket.emit('owner_msg', `${cleanTarget}-কে সফলভাবে ${bonusAmt} TK বোনাস দেওয়া হয়েছে!`);
   });
+
+  // 7. Owner Delete User
   socket.on('owner_delete_user', async ({ targetUserId }) => {
     if (onlineSockets[socket.id] !== 'OWNER' || !targetUserId) return;
     const cleanTarget = targetUserId.trim().toLowerCase();
@@ -500,6 +619,7 @@ io.on('connection', (socket) => {
     socket.emit('owner_msg', `${cleanTarget} আইডি এবং এর সব হিস্টোরি স্থায়ীভাবে মুছে ফেলা হয়েছে!`);
   });
 
+  // 8. Owner Approve/Reject Deposit & Withdraw
   socket.on('owner_handle_request', async ({ requestId, action }) => {
     if (onlineSockets[socket.id] !== 'OWNER') return;
 
