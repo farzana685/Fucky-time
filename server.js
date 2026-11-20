@@ -43,8 +43,10 @@ const requestSchema = new mongoose.Schema({
   amount: Number,
   note: String,
   status: { type: String, default: 'PENDING' },
+  expireAt: { type: Date, default: undefined },
   createdAt: { type: Date, default: Date.now }
 });
+requestSchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
 const PointRequest = mongoose.model('PointRequest', requestSchema);
 
 const houseStatsSchema = new mongoose.Schema({
@@ -71,6 +73,7 @@ const WHEEL_64 = [
 ].slice(0, 64);
 
 let onlineSockets = {};
+let transferLocks = {};
 let currentBets = {};
 let gameState = 'BETTING';
 let timer = 10;
@@ -371,7 +374,6 @@ io.on('connection', (socket) => {
         return socket.emit('auth_error', 'আইডি এবং পাসওয়ার্ড দিন!');
       }
 
-      // Check Owner Login
       if (cleanId === OWNER_ID.toLowerCase()) {
         if (password !== OWNER_PASS) {
           return socket.emit('auth_error', 'ভুল ওনার পাসওয়ার্ড দিয়েছেন!');
@@ -400,7 +402,6 @@ io.on('connection', (socket) => {
         return;
       }
 
-      // Check Player Login
       const user = await User.findOne({ userId: cleanId });
       if (!user) {
         return socket.emit('auth_error', 'এই নম্বর দিয়ে কোনো অ্যাকাউন্ট খোলা নেই!');
@@ -434,7 +435,167 @@ io.on('connection', (socket) => {
       socket.emit('auth_error', 'লগইন সমস্যা হয়েছে! আবার চেষ্টা করুন।');
     }
   });
-  // 3. Place Bet
+  // 3. Player-to-Player Secure Balance Transfer (Min 500 TK, Auto-Reset Turnover on Zero Balance, 6h Auto-Delete Receipt)
+  socket.on('transfer_points', async ({ recipientId, amount, password }) => {
+    const senderId = onlineSockets[socket.id];
+    if (!senderId || senderId === 'OWNER') return;
+
+    if (transferLocks[senderId]) {
+      return socket.emit('transfer_error', 'একটি ট্রান্সফার প্রক্রিয়াধীন আছে, অনুগ্রহ করে অপেক্ষা করুন!');
+    }
+    transferLocks[senderId] = true;
+
+    try {
+      if (typeof recipientId !== 'string' || typeof password !== 'string') {
+        return socket.emit('transfer_error', 'সঠিক তথ্য দিন!');
+      }
+
+      const cleanRecipient = recipientId.trim().toLowerCase();
+      const transferAmt = Math.floor(Number(amount));
+
+      if (!Number.isInteger(transferAmt) || transferAmt < 500 || Number(amount) !== transferAmt) {
+        return socket.emit('transfer_error', 'সর্বনিম্ন ৫০০ TK (পূর্ণ সংখ্যা) ট্রান্সফার করা যাবে!');
+      }
+
+      if (cleanRecipient === senderId) {
+        return socket.emit('transfer_error', 'নিজের নম্বরে নিজে টাকা ট্রান্সফার করা যাবে না!');
+      }
+
+      if (cleanRecipient === OWNER_ID.toLowerCase()) {
+        return socket.emit('transfer_error', 'ওনার আইডিতে ট্রান্সফার করা যাবে না!');
+      }
+
+      const bdPhoneRegex = /^01[3-9]\d{8}$/;
+      if (!bdPhoneRegex.test(cleanRecipient)) {
+        return socket.emit('transfer_error', 'সঠিক ১১ ডিজিটের প্রাপক মোবাইল নম্বর দিন!');
+      }
+
+      const sender = await User.findOne({ userId: senderId });
+      if (!sender) {
+        return socket.emit('transfer_error', 'আপনার অ্যাকাউন্ট খুঁজে পাওয়া যায়নি!');
+      }
+
+      const isPassValid = await bcrypt.compare(password, sender.passwordHash);
+      if (!isPassValid) {
+        return socket.emit('transfer_error', 'ভুল পাসওয়ার্ড দিয়েছেন! ট্রান্সফার বাতিল করা হয়েছে।');
+      }
+
+      if (sender.points < transferAmt) {
+        return socket.emit('transfer_error', 'আপনার অ্যাকাউন্টে পর্যাপ্ত ব্যালেন্স নেই!');
+      }
+
+      const recipient = await User.findOne({ userId: cleanRecipient });
+      if (!recipient) {
+        return socket.emit('transfer_error', 'এই মোবাইল নম্বরে কোনো প্লেয়ার অ্যাকাউন্ট খোলা নেই!');
+      }
+
+      const turnoverToMove = transferAmt * 2;
+      const senderRemTurnover = Math.max(0, (sender.requiredTurnover || 0) - (sender.completedTurnover || 0));
+      const senderTurnoverReduction = Math.min(senderRemTurnover, turnoverToMove);
+
+      const updatedSender = await User.findOneAndUpdate(
+        { userId: senderId, points: { $gte: transferAmt } },
+        {
+          $inc: {
+            points: -transferAmt,
+            requiredTurnover: -senderTurnoverReduction
+          }
+        },
+        { new: true }
+      );
+
+      if (!updatedSender) {
+        return socket.emit('transfer_error', 'পর্যাপ্ত ব্যালেন্স না থাকায় ট্রান্সফার সম্পন্ন হয়নি!');
+      }
+
+      if (updatedSender.points < 10 && updatedSender.requiredTurnover > updatedSender.completedTurnover) {
+        updatedSender.requiredTurnover = 0;
+        updatedSender.completedTurnover = 0;
+        await updatedSender.save();
+      }
+
+      const recHasZeroBalance = (recipient.points || 0) < 10;
+      const recipientUpdateQuery = recHasZeroBalance
+        ? {
+            $inc: { points: transferAmt, totalDeposited: transferAmt },
+            $set: { requiredTurnover: turnoverToMove, completedTurnover: 0 }
+          }
+        : {
+            $inc: {
+              points: transferAmt,
+              totalDeposited: transferAmt,
+              requiredTurnover: turnoverToMove
+            }
+          };
+
+      let updatedRecipient;
+      try {
+        updatedRecipient = await User.findOneAndUpdate(
+          { userId: cleanRecipient },
+          recipientUpdateQuery,
+          { new: true }
+        );
+      } catch (creditErr) {
+        await User.updateOne(
+          { userId: senderId },
+          { $inc: { points: transferAmt, requiredTurnover: senderTurnoverReduction } }
+        );
+        return socket.emit('transfer_error', 'সার্ভার ত্রুটির কারণে ট্রান্সফার বাতিল হয়েছে, আপনার ব্যালেন্স সুরক্ষিত আছে।');
+      }
+
+      const sixHoursLater = new Date(Date.now() + 6 * 60 * 60 * 1000);
+      await PointRequest.create([
+        {
+          userId: senderId,
+          type: 'TRANSFER_OUT',
+          amount: transferAmt,
+          note: `সেন্ড মানি: ${cleanRecipient}-কে পাঠানো হয়েছে (${transferAmt} TK) | সমস্যা হলে ৬ ঘণ্টার মধ্যে যোগাযোগ করুন`,
+          status: 'APPROVED',
+          expireAt: sixHoursLater
+        },
+        {
+          userId: cleanRecipient,
+          type: 'TRANSFER_IN',
+          amount: transferAmt,
+          note: `রিসিভ মানি: ${senderId} থেকে প্রাপ্ত (${transferAmt} TK) | ৬ ঘণ্টা পর রেকর্ড অটো-ডিলিট হবে`,
+          status: 'APPROVED',
+          expireAt: sixHoursLater
+        }
+      ]);
+
+      const newSenderRemTurnover = Math.max(0, (updatedSender.requiredTurnover || 0) - (updatedSender.completedTurnover || 0));
+      const senderHistory = await PointRequest.find({ userId: senderId }).sort({ createdAt: -1 }).limit(20);
+      socket.emit('points_updated', {
+        points: updatedSender.points,
+        totalWon: updatedSender.totalWon,
+        totalLost: updatedSender.totalLost,
+        remainingTurnover: newSenderRemTurnover
+      });
+      socket.emit('history_updated', senderHistory);
+      socket.emit('transfer_success', `${cleanRecipient} নম্বরে সফলভাবে ${transferAmt} TK ট্রান্সফার হয়েছে!`);
+
+      if (updatedRecipient) {
+        const newRecRemTurnover = Math.max(0, (updatedRecipient.requiredTurnover || 0) - (updatedRecipient.completedTurnover || 0));
+        const recHistory = await PointRequest.find({ userId: cleanRecipient }).sort({ createdAt: -1 }).limit(20);
+        io.to(cleanRecipient).emit('points_updated', {
+          points: updatedRecipient.points,
+          totalWon: updatedRecipient.totalWon,
+          totalLost: updatedRecipient.totalLost,
+          remainingTurnover: newRecRemTurnover
+        });
+        io.to(cleanRecipient).emit('history_updated', recHistory);
+        io.to(cleanRecipient).emit('request_sent', `${senderId} থেকে আপনার অ্যাকাউন্টে ${transferAmt} TK যোগ হয়েছে!`);
+      }
+
+      await broadcastOwnerUsers();
+    } catch (e) {
+      socket.emit('transfer_error', 'ট্রান্সফার করতে সমস্যা হয়েছে! আবার চেষ্টা করুন।');
+    } finally {
+      delete transferLocks[senderId];
+    }
+  });
+
+  // 4. Place Bet
   socket.on('place_bet', async ({ segment, amount }) => {
     try {
       const uid = onlineSockets[socket.id];
@@ -474,8 +635,7 @@ io.on('connection', (socket) => {
       socket.emit('bet_error', 'বেট ধরতে সমস্যা হয়েছে!');
     }
   });
-
-  // 4. Clear Bets
+  // 5. Clear Bets
   socket.on('clear_bets', async () => {
     const uid = onlineSockets[socket.id];
     if (!uid || uid === 'OWNER' || gameState !== 'BETTING') return;
@@ -511,7 +671,7 @@ io.on('connection', (socket) => {
     socket.emit('my_bets_updated', {});
   });
 
-  // 5. Deposit / Withdraw Request
+  // 6. Deposit / Withdraw Request
   socket.on('send_point_request', async ({ type, amount, note }) => {
     const uid = onlineSockets[socket.id];
     const numAmt = Math.floor(Number(amount));
@@ -557,7 +717,8 @@ io.on('connection', (socket) => {
     socket.emit('request_sent', 'রিকোয়েস্ট পাঠানো হয়েছে! ওনার অ্যাপ্রুভ করলে সাথে সাথে ব্যালেন্স কনফার্ম হবে।');
     io.to('OWNER_ROOM').emit('new_owner_request', reqDoc);
   });
-  // 6. Owner Give Bonus
+
+  // 7. Owner Give Bonus
   socket.on('owner_give_bonus', async ({ targetUserId, amount }) => {
     if (onlineSockets[socket.id] !== 'OWNER') return;
     const bonusAmt = Math.floor(Number(amount));
@@ -599,8 +760,7 @@ io.on('connection', (socket) => {
     await broadcastOwnerUsers();
     socket.emit('owner_msg', `${cleanTarget}-কে সফলভাবে ${bonusAmt} TK বোনাস দেওয়া হয়েছে!`);
   });
-
-  // 7. Owner Delete User
+  // 8. Owner Delete User
   socket.on('owner_delete_user', async ({ targetUserId }) => {
     if (onlineSockets[socket.id] !== 'OWNER' || !targetUserId) return;
     const cleanTarget = targetUserId.trim().toLowerCase();
@@ -619,7 +779,7 @@ io.on('connection', (socket) => {
     socket.emit('owner_msg', `${cleanTarget} আইডি এবং এর সব হিস্টোরি স্থায়ীভাবে মুছে ফেলা হয়েছে!`);
   });
 
-  // 8. Owner Approve/Reject Deposit & Withdraw
+  // 9. Owner Approve/Reject Deposit & Withdraw (300+ First Deposit = 200 Welcome Bonus)
   socket.on('owner_handle_request', async ({ requestId, action }) => {
     if (onlineSockets[socket.id] !== 'OWNER') return;
 
@@ -711,6 +871,7 @@ io.on('connection', (socket) => {
   socket.on('disconnect', async () => {
     const uid = onlineSockets[socket.id];
     delete onlineSockets[socket.id];
+    delete transferLocks[uid];
     if (uid && uid !== 'OWNER') {
       await User.updateOne({ userId: uid }, { $set: { lastSeen: new Date() } });
     }
