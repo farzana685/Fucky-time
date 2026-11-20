@@ -17,6 +17,7 @@
     .auth-card { background: #180830; border: 2px solid #f59e0b; padding: 24px; border-radius: 16px; width: 92%; max-width: 380px; text-align: center; box-shadow: 0 0 35px rgba(245, 158, 11, 0.4); }
     .auth-card h2 { color: #fde047; margin-bottom: 10px; }
     .orig-notice { background: rgba(250, 204, 21, 0.14); border: 1.5px solid #facc15; color: #fde047; padding: 9px; border-radius: 8px; font-size: 13px; font-weight: bold; margin-bottom: 12px; line-height: 1.4; }
+    .welcome-promo { background: linear-gradient(90deg, rgba(16, 185, 129, 0.22), rgba(245, 158, 11, 0.22)); border: 1px solid #10b981; color: #a7f3d0; padding: 7px 12px; border-radius: 8px; font-size: 12px; font-weight: bold; text-align: center; margin-top: 6px; width: 95%; max-width: 560px; }
     .auth-card input { width: 100%; padding: 12px; margin-bottom: 12px; border-radius: 8px; border: 1px solid #6b21a8; background: #0f0520; color: #fff; font-size: 16px; }
     .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin-bottom: 8px; font-size: 15px; }
     .btn-primary { background: linear-gradient(90deg, #ff007f, #7928ca); color: #fff; }
@@ -72,10 +73,10 @@
     .list-item { background: #0f172a; padding: 10px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; gap: 6px; flex-wrap: wrap; }
     .house-box { background: linear-gradient(135deg, #064e3b, #0f172a); border: 1px solid #10b981; padding: 12px; border-radius: 8px; margin-bottom: 12px; }
     .bonus-mini-btn { background: #f59e0b; color: #000; border: none; padding: 4px 7px; border-radius: 4px; font-weight: bold; font-size: 11px; cursor: pointer; margin-left: 3px; }
+    .del-mini-btn { background: #ef4444; color: #fff; border: none; padding: 4px 7px; border-radius: 4px; font-weight: bold; font-size: 11px; cursor: pointer; margin-left: 4px; }
   </style>
 </head>
 <body>
-
   <div class="privacy-shield" id="privacyShield">⚠️ নিরাপত্তা সতর্কতা!<br>এই গেমে স্ক্রিনশট বা স্ক্রিন রেকর্ডিং সম্পূর্ণ নিষিদ্ধ।</div>
   <div class="dynamic-watermark" id="userWatermark"></div>
   <div class="win-toast" id="winToast">YOU WON +0 TK!</div>
@@ -84,13 +85,13 @@
     <div class="auth-card">
       <h2>FUNKY TIME LIVE</h2>
       <div class="orig-notice">
-        ⚠️ ORIGINAL PHONE NUMBER DIYA NIBONDHON KORUN!<br>
-        <span style="font-size:11.5px; color:#fff; font-weight:normal;">আপনার আসল ১১ ডিজিটের মোবাইল নম্বর দিন। শুধু এই নম্বরেই উইথড্র পেমেন্ট করা হবে।</span>
+        🎁 স্পেশাল ওয়েলকাম অফার!<br>
+        <span style="font-size:12px; color:#fff; font-weight:normal;">নতুন অ্যাকাউন্টে প্রথমবার কমপক্ষে <b>৩০০ TK ডিপোজিট</b> করলেই পাচ্ছেন <b>২০০ TK ফ্রি বোনাস</b>! (আসল ১১ ডিজিটের মোবাইল নম্বর দিয়ে নিবন্ধন করুন)</span>
       </div>
       <input type="text" id="uidInput" placeholder="১১ ডিজিটের মোবাইল নম্বর (যেমন: 017xxxxxxxx)">
       <input type="password" id="passInput" placeholder="পাসওয়ার্ড লিখুন">
       <button class="btn btn-primary" onclick="doLogin()">লগইন করুন</button>
-      <button class="btn btn-secondary" onclick="doRegister()">নতুন অ্যাকাউন্ট খুলুন (২০০ TK বোনাস)</button>
+      <button class="btn btn-secondary" onclick="doRegister()">নতুন অ্যাকাউন্ট খুলুন (১ম ডিপোজিটে ২০০ TK বোনাস)</button>
       <p id="authMsg" style="color:#f87171; font-size:13px; margin-top:8px;"></p>
     </div>
   </div>
@@ -103,6 +104,10 @@
       <button class="action-btn" id="playerHistBtn" style="background:#38bdf8; color:#000;" onclick="openModal('histModal')">History</button>
       <button class="action-btn" id="ownerPanelBtn" style="display:none; background:#f59e0b; color:#000;" onclick="openModal('ownerModal')">Owner Panel</button>
     </div>
+  </div>
+
+  <div class="welcome-promo" id="promoBanner">
+    🎁 অফার: নতুন ইউজার প্রথম ৩০০+ TK ডিপোজিট করলেই পাচ্ছেন ২০০ TK ওয়েলকাম বোনাস!
   </div>
 
   <div class="stats-strip" id="playerStats">
@@ -144,9 +149,13 @@
     </div>
     <div class="hold-hint">💡 টিপস: বেটিং চলাকালীন কোনো ঘরে চেপে ধরলে (Hold) ওই ঘরের বেট উঠে যাবে।</div>
   </div>
+
   <div class="modal" id="reqModal">
     <div class="modal-box">
-      <h3 style="margin-bottom:12px;">ওনারকে Deposit / Withdraw রিকোয়েস্ট পাঠান</h3>
+      <h3 style="margin-bottom:8px;">ওনারকে Deposit / Withdraw রিকোয়েস্ট পাঠান</h3>
+      <div style="background:rgba(16,185,129,0.18); border:1px solid #10b981; color:#a7f3d0; padding:7px; border-radius:6px; font-size:12px; margin-bottom:10px;">
+        🎁 নতুন অ্যাকাউন্টে প্রথমবার কমপক্ষে <b>৩০০ TK ডিপোজিট</b> করলে সাথে সাথে <b>২০০ TK ওয়েলকাম বোনাস</b> পাবেন!
+      </div>
       <select id="reqType" onchange="toggleWithdrawNumber()" style="width:100%; padding:10px; margin-bottom:10px; border-radius:6px;">
         <option value="ADD">Deposit (TK যোগ করুন)</option>
         <option value="DEDUCT">Withdraw (TK উত্তোলন করুন)</option>
@@ -157,7 +166,6 @@
       <button class="btn btn-secondary" onclick="closeModals()">বন্ধ করুন</button>
     </div>
   </div>
-
   <div class="modal" id="histModal">
     <div class="modal-box">
       <h3 style="margin-bottom:12px;">আপনার লেনদেন ও বোনাসের ইতিহাস</h3>
@@ -186,10 +194,11 @@
       <h4 style="font-size:13px; margin-bottom:6px; color:#38bdf8;">Pending Deposit/Withdraw Requests:</h4>
       <div id="ownerReqList" style="max-height:150px; overflow-y:auto; margin-bottom:12px;"></div>
       <h4 style="font-size:13px; margin-bottom:6px; color:#10b981;">All Registered Players (Online Top / Offline Bottom):</h4>
-      <div id="ownerUserList" style="max-height:160px; overflow-y:auto; margin-bottom:12px;"></div>
+      <div id="ownerUserList" style="max-height:180px; overflow-y:auto; margin-bottom:12px;"></div>
       <button class="btn btn-secondary" onclick="closeModals()">বন্ধ করুন</button>
     </div>
   </div>
+
   <script>
     const socket = io();
     let wheelData = [];
@@ -278,13 +287,13 @@
     function clearAllBets() {
       socket.emit('clear_bets');
     }
-
     function renderRecentResults(list) {
       const bar = document.getElementById('recentBar');
       if (!bar || !list) return;
       bar.innerHTML = '<span style="font-size:11px; color:#94a3b8;">Last:</span>' +
         list.map(item => `<span class="recent-pill" style="background:${SEGMENT_COLORS[item] || '#fff'}">${item}</span>`).join('');
     }
+
     function drawWheel() {
       const canvas = document.getElementById('wheelCanvas');
       const ctx = canvas.getContext('2d');
@@ -406,7 +415,6 @@
       };
       return div;
     }
-
     function renderGrid() {
       const leftCol = document.getElementById('leftCol');
       const lettersGrid = document.getElementById('lettersGrid');
@@ -431,6 +439,7 @@
       bonusCol.appendChild(createCellHTML('STAYIN', "STAYIN' ALIVE"));
       bonusCol.appendChild(createCellHTML('VIP', 'VIP DISCO'));
     }
+
     function openModal(id) {
       document.getElementById(id).style.display = 'flex';
       if (id === 'reqModal') toggleWithdrawNumber();
@@ -495,6 +504,12 @@
       }
     }
 
+    function deletePlayerId(uid) {
+      if (confirm(`⚠️ সতর্কতা: আপনি কি নিশ্চিত যে ${uid} আইডি এবং এর সব হিস্টোরি স্থায়ীভাবে মুছে ফেলতে চান?`)) {
+        socket.emit('owner_delete_user', { targetUserId: uid });
+      }
+    }
+
     function sendCustomBonus() {
       const uid = document.getElementById('bonusTargetUid').value;
       const amt = document.getElementById('bonusCustomAmt').value;
@@ -502,7 +517,6 @@
       socket.emit('owner_give_bonus', { targetUserId: uid, amount: amt });
       document.getElementById('bonusCustomAmt').value = '';
     }
-
     function renderOwnerData(pending, users) {
       const reqEl = document.getElementById('ownerReqList');
       reqEl.innerHTML = (!pending || pending.length === 0)
@@ -524,7 +538,7 @@
           const remT = Math.max(0, (u.requiredTurnover || 0) - (u.completedTurnover || 0));
           const statusBadge = u.isOnline
             ? '<span style="background:#064e3b; color:#34d399; padding:2px 6px; border-radius:10px; font-size:10px; margin-left:4px;">🟢 ONLINE</span>'
-            : '<span style="background:#1e293b; color:#94a3b8; padding:2px 6px; border-radius:10px; font-size:10px; margin-left:4px;">⚫ OFFLINE</span>';
+            : `<span style="background:#1e293b; color:#94a3b8; padding:2px 6px; border-radius:10px; font-size:10px; margin-left:4px;">⚫ OFFLINE • 🕒 ${u.lastSeenText || 'N/A'}</span>`;
           return `
             <div class="list-item" style="border-left: 3px solid ${u.isOnline ? '#10b981' : '#475569'};">
               <div>
@@ -535,6 +549,7 @@
                 <button class="bonus-mini-btn" onclick="giveQuickBonus('${u.userId}', 50)">+50</button>
                 <button class="bonus-mini-btn" onclick="giveQuickBonus('${u.userId}', 100)">+100</button>
                 <button class="bonus-mini-btn" onclick="giveQuickBonus('${u.userId}', 150)">+150</button>
+                <button class="del-mini-btn" onclick="deletePlayerId('${u.userId}')">🗑️</button>
               </div>
             </div>
           `;
@@ -544,6 +559,7 @@
     function handleReq(id, action) {
       socket.emit('owner_handle_request', { requestId: id, action });
     }
+
     socket.on('wheel_setup', (data) => {
       wheelData = data.wheel;
       payoutsData = data.payouts;
@@ -575,6 +591,7 @@
         document.getElementById('playerReqBtn').style.display = 'none';
         document.getElementById('playerHistBtn').style.display = 'none';
         document.getElementById('playerStats').style.display = 'none';
+        document.getElementById('promoBanner').style.display = 'none';
         document.getElementById('ownerPanelBtn').style.display = 'inline-block';
         renderOwnerData(data.pendingRequests, data.allUsers);
         updateHouseUI(data.houseStats);
