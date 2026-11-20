@@ -255,7 +255,6 @@
       'STAYIN': "STAYIN' ALIVE",
       'VIP': 'VIP DISCO'
     };
-
     function doLogin() {
       socket.emit('login_user', {
         userId: document.getElementById('uidInput').value,
@@ -287,6 +286,7 @@
     function clearAllBets() {
       socket.emit('clear_bets');
     }
+
     function renderRecentResults(list) {
       const bar = document.getElementById('recentBar');
       if (!bar || !list) return;
@@ -352,7 +352,6 @@
         ctx.fillStyle = '#fef08a';
         ctx.fill();
       }
-
       ctx.beginPath();
       ctx.arc(cx, cy, 58, 0, 2 * Math.PI);
       ctx.fillStyle = '#7c2d12';
@@ -415,6 +414,7 @@
       };
       return div;
     }
+
     function renderGrid() {
       const leftCol = document.getElementById('leftCol');
       const lettersGrid = document.getElementById('lettersGrid');
@@ -448,7 +448,6 @@
     function closeModals() {
       document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
     }
-
     function toggleWithdrawNumber() {
       const type = document.getElementById('reqType').value;
       const noteInput = document.getElementById('reqNote');
@@ -517,6 +516,7 @@
       socket.emit('owner_give_bonus', { targetUserId: uid, amount: amt });
       document.getElementById('bonusCustomAmt').value = '';
     }
+
     function renderOwnerData(pending, users) {
       const reqEl = document.getElementById('ownerReqList');
       reqEl.innerHTML = (!pending || pending.length === 0)
@@ -555,7 +555,6 @@
           `;
         }).join('');
     }
-
     function handleReq(id, action) {
       socket.emit('owner_handle_request', { requestId: id, action });
     }
