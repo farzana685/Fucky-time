@@ -503,7 +503,6 @@ io.on('connection', (socket) => {
         },
         { new: true }
       );
-
       if (!updatedSender) {
         return socket.emit('transfer_error', 'পর্যাপ্ত ব্যালেন্স না থাকায় ট্রান্সফার সম্পন্ন হয়নি!');
       }
@@ -594,9 +593,8 @@ io.on('connection', (socket) => {
       delete transferLocks[senderId];
     }
   });
-
   // 4. Place Bet
-  socket.on('place_bet', async ({ segment, amount }) => {
+  socket.on('place_bet', async ({ segmentId, segment, amount }) => {
     try {
       const uid = onlineSockets[socket.id];
       if (!uid || uid === 'OWNER') return;
@@ -605,8 +603,9 @@ io.on('connection', (socket) => {
         return socket.emit('bet_error', 'বেট ধরার সময় শেষ!');
       }
 
+      const targetSeg = segmentId || segment;
       const betAmt = Math.floor(Number(amount));
-      if (!PAYOUTS[segment] || isNaN(betAmt) || betAmt <= 0) {
+      if (!PAYOUTS[targetSeg] || isNaN(betAmt) || betAmt <= 0) {
         return socket.emit('bet_error', 'সঠিক পরিমাণ বেট ধরুন!');
       }
 
@@ -621,7 +620,7 @@ io.on('connection', (socket) => {
       }
 
       if (!currentBets[uid]) currentBets[uid] = {};
-      currentBets[uid][segment] = (currentBets[uid][segment] || 0) + betAmt;
+      currentBets[uid][targetSeg] = (currentBets[uid][targetSeg] || 0) + betAmt;
 
       const remTurnover = Math.max(0, (updatedUser.requiredTurnover || 0) - (updatedUser.completedTurnover || 0));
       socket.emit('points_updated', {
@@ -634,6 +633,37 @@ io.on('connection', (socket) => {
     } catch (e) {
       socket.emit('bet_error', 'বেট ধরতে সমস্যা হয়েছে!');
     }
+  });
+
+  // 4b. Remove Single Bet (Long Press)
+  socket.on('remove_bet', async ({ segmentId }) => {
+    const uid = onlineSockets[socket.id];
+    if (!uid || uid === 'OWNER' || gameState !== 'BETTING') return;
+    if (!currentBets[uid] || !currentBets[uid][segmentId]) return;
+
+    const refundAmt = currentBets[uid][segmentId];
+    delete currentBets[uid][segmentId];
+
+    const user = await User.findOneAndUpdate(
+      { userId: uid },
+      { $inc: { points: refundAmt, completedTurnover: -refundAmt } },
+      { new: true }
+    );
+
+    if (user) {
+      if (user.completedTurnover < 0) {
+        user.completedTurnover = 0;
+        await user.save();
+      }
+      const remTurnover = Math.max(0, (user.requiredTurnover || 0) - (user.completedTurnover || 0));
+      socket.emit('points_updated', {
+        points: user.points,
+        totalWon: user.totalWon,
+        totalLost: user.totalLost,
+        remainingTurnover: remTurnover
+      });
+    }
+    socket.emit('my_bets_updated', currentBets[uid]);
   });
   // 5. Clear Bets
   socket.on('clear_bets', async () => {
@@ -717,7 +747,6 @@ io.on('connection', (socket) => {
     socket.emit('request_sent', 'রিকোয়েস্ট পাঠানো হয়েছে! ওনার অ্যাপ্রুভ করলে সাথে সাথে ব্যালেন্স কনফার্ম হবে।');
     io.to('OWNER_ROOM').emit('new_owner_request', reqDoc);
   });
-
   // 7. Owner Give Bonus
   socket.on('owner_give_bonus', async ({ targetUserId, amount }) => {
     if (onlineSockets[socket.id] !== 'OWNER') return;
@@ -760,6 +789,7 @@ io.on('connection', (socket) => {
     await broadcastOwnerUsers();
     socket.emit('owner_msg', `${cleanTarget}-কে সফলভাবে ${bonusAmt} TK বোনাস দেওয়া হয়েছে!`);
   });
+
   // 8. Owner Delete User
   socket.on('owner_delete_user', async ({ targetUserId }) => {
     if (onlineSockets[socket.id] !== 'OWNER' || !targetUserId) return;
@@ -778,7 +808,6 @@ io.on('connection', (socket) => {
     await broadcastOwnerUsers();
     socket.emit('owner_msg', `${cleanTarget} আইডি এবং এর সব হিস্টোরি স্থায়ীভাবে মুছে ফেলা হয়েছে!`);
   });
-
   // 9. Owner Approve/Reject Deposit & Withdraw (300+ First Deposit = 200 Welcome Bonus)
   socket.on('owner_handle_request', async ({ requestId, action }) => {
     if (onlineSockets[socket.id] !== 'OWNER') return;
